@@ -7,7 +7,7 @@ from sqlalchemy import select
 from conftest import Cust, login, make_apk
 
 
-def test_register_login_logout_refresh(client):
+def test_register_login_logout_refresh(client, db):
     c = Cust(client)
     me = client.get("/api/me", headers=c.h).json()
     assert me["email"] == c.email and me["role"] == "customer" and not me["is_staff"]
@@ -17,7 +17,15 @@ def test_register_login_logout_refresh(client):
     session = login(client, c.email, c.password)
     rotated = client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]})
     assert rotated.status_code == 200
-    # 회전된 갱신 토큰은 재사용할 수 없다
+    # 회전된 갱신 토큰은 짧은 유예(60초) 뒤에는 재사용할 수 없다
+    assert client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]}).status_code == 200
+    from datetime import timedelta
+    from app.db import utcnow
+    from app.models import Session as UserSession
+    from app.security import sha256_hex
+    db.execute(UserSession.__table__.update().where(UserSession.refresh_hash == sha256_hex(session["refresh_token"]))
+               .values(rotated_at=utcnow() - timedelta(minutes=2)))
+    db.commit()
     assert client.post("/api/auth/refresh", json={"refresh_token": session["refresh_token"]}).status_code == 401
     new_refresh = rotated.json()["refresh_token"]
     assert client.post("/api/auth/logout", json={"refresh_token": new_refresh}).status_code == 200

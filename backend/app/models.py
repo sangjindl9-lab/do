@@ -81,6 +81,7 @@ class Session(Base):
     ip = Column(String(60), default="")
     created_at = TS(default=utcnow, nullable=False)
     expires_at = TS(nullable=False)
+    rotated_at = TS()
     revoked_at = TS()
 
 

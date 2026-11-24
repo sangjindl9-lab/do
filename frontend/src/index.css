@@ -1,0 +1,16 @@
+@import "@fontsource/ibm-plex-sans-kr/400.css";
+@import "@fontsource/ibm-plex-sans-kr/500.css";
+@import "@fontsource/ibm-plex-sans-kr/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { background: #fafafa; color: #171717; -webkit-font-smoothing: antialiased; }
+body { font-family: "IBM Plex Sans KR", system-ui, sans-serif; font-size: 14px; line-height: 22px; word-break: keep-all; }
+.num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid #0f766e; outline-offset: 2px; border-radius: 4px; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 360ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .rise { animation: none; } }

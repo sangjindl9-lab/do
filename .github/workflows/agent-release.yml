@@ -1,0 +1,68 @@
+name: Agent Release
+# 태그(agent-v*)를 푸시하거나 수동 실행하면 PC 에이전트 설치 파일을 빌드해 GitHub Releases에 등록한다.
+on:
+  push: { tags: ["agent-v*"] }
+  workflow_dispatch:
+    inputs:
+      tag: { description: "릴리스 태그 (예: agent-v1.0.0)", required: true, default: "agent-v1.0.0" }
+permissions: { contents: write }
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install httpx websockets PySide6 pywin32 pyinstaller
+      - name: 실행 파일 빌드
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --windowed --name GoogleAutoTesterAgent --paths android-engine --paths device-agent --collect-submodules gat_engine --collect-submodules gat_agent device-agent/entry_gui.py
+          pyinstaller --noconfirm --clean --console --name gat-agent --paths android-engine --paths device-agent --collect-submodules gat_engine --collect-submodules gat_agent device-agent/entry_cli.py
+          pyinstaller --noconfirm --clean --console --name GoogleAutoTesterAgentService --paths android-engine --paths device-agent --collect-submodules gat_engine --collect-submodules gat_agent --hidden-import win32timezone device-agent/entry_service.py
+          New-Item -ItemType Directory -Force dist/app | Out-Null
+          Copy-Item -Recurse -Force dist/GoogleAutoTesterAgent/* dist/app/
+          Copy-Item -Recurse -Force dist/gat-agent/* dist/app/
+          Copy-Item -Recurse -Force dist/GoogleAutoTesterAgentService/* dist/app/
+      - name: 빌드 결과 동작 확인 (모의 장비 자체 시험 + 서비스 등록/해제)
+        shell: pwsh
+        run: |
+          dist/app/gat-agent.exe --version
+          dist/app/gat-agent.exe selftest
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dist/app/GoogleAutoTesterAgentService.exe install
+          sc.exe query GoogleAutoTesterAgent
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          dist/app/GoogleAutoTesterAgentService.exe remove
+      - name: 설치 파일(Inno Setup) 빌드
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installers/windows/agent.iss
+          Compress-Archive -Path dist/app/* -DestinationPath dist/GoogleAutoTesterAgent-windows.zip
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Google Auto Tester Agent ${{ env.TAG }}
+          files: |
+            dist/GoogleAutoTesterAgent-Setup.exe
+            dist/GoogleAutoTesterAgent-windows.zip
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 패키지 구성 및 동작 확인
+        run: |
+          bash installers/linux/package.sh
+          mkdir t && tar -xzf dist/google-auto-tester-agent-linux.tar.gz -C t
+          pip install httpx websockets
+          PYTHONPATH=t/google-auto-tester-agent python -m gat_agent selftest
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Google Auto Tester Agent ${{ env.TAG }}
+          files: dist/google-auto-tester-agent-linux.tar.gz

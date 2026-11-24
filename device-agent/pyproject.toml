@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "google-auto-tester-agent"
+version = "1.0.0"
+description = "Google Auto Tester Agent - 폰팜 제어용 PC 에이전트"
+requires-python = ">=3.10"
+dependencies = ["httpx>=0.27", "websockets>=13"]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+appium = ["Appium-Python-Client>=4"]
+windows = ["pywin32>=306"]
+
+[project.scripts]
+gat-agent = "gat_agent.cli:main"
+
+[tool.setuptools]
+packages = ["gat_agent", "gat_engine", "gat_engine.providers"]
+
+[tool.setuptools.package-dir]
+gat_agent = "gat_agent"
+gat_engine = "../android-engine/gat_engine"

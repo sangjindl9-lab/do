@@ -50,7 +50,7 @@ async def guard(request: Request, call_next):
     if not path.startswith("/api/docs"):
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "
+            "default-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; "
             "script-src 'self' https://js.tosspayments.com; frame-src https://*.tosspayments.com; "
             "connect-src 'self' https://*.tosspayments.com; frame-ancestors 'none'")
     if path.startswith("/api/"):

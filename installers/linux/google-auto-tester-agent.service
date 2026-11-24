@@ -1,0 +1,15 @@
+[Unit]
+Description=Google Auto Tester Agent (폰팜 제어)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gat-agent run
+Restart=always
+RestartSec=5
+# 필요 시 전용 계정으로 바꾸고 plugdev 그룹(USB 접근)을 부여하세요.
+User=root
+
+[Install]
+WantedBy=multi-user.target

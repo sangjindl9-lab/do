@@ -24,7 +24,7 @@ class Settings:
     REFRESH_TOKEN_DAYS = int(_env("REFRESH_TOKEN_DAYS", "14"))
     MAX_APK_MB = int(_env("MAX_APK_MB", "300"))
     RUN_SCHEDULER = _env("RUN_SCHEDULER", "1") == "1"
-    RATE_LIMIT_PER_MIN = int(_env("RATE_LIMIT_PER_MIN", "240"))
+    RATE_LIMIT_PER_MIN = int(_env("RATE_LIMIT_PER_MIN", "1200"))
     FRONTEND_DIST = _env("FRONTEND_DIST", os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
     AGENT_DOWNLOAD_REPO = _env("AGENT_DOWNLOAD_REPO", "sangjindl9-lab/do")
 

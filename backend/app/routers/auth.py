@@ -20,7 +20,7 @@ from ..services.audit import audit
 from ..services.notifications import notify
 
 router = APIRouter(prefix="/api", tags=["auth"])
-MAX_FAILS, LOCK_MINUTES = 5, 15
+MAX_FAILS, LOCK_MINUTES, ROTATION_GRACE_SEC = 5, 15, 60
 
 
 def base_url(request: Request) -> str:
@@ -175,12 +175,14 @@ class RefreshIn(BaseModel):
 @router.post("/auth/refresh")
 def refresh(body: RefreshIn, request: Request, db: Session = Depends(get_db)):
     row = db.scalar(select(UserSession).where(UserSession.refresh_hash == sha256_hex(body.refresh_token)).with_for_update(of=UserSession))
-    if not row or row.revoked_at or row.expires_at < utcnow():
+    now = utcnow()
+    # 갱신 토큰 회전: 교체된 토큰은 60초 동안만 재사용을 허용한다(여러 탭·새로고침 중 경합 대비).
+    if not row or row.revoked_at or row.expires_at < now or (row.rotated_at and row.rotated_at < now - timedelta(seconds=ROTATION_GRACE_SEC)):
         raise HTTPException(401, "세션이 만료되었습니다. 다시 로그인해 주세요.")
     user = db.get(User, row.user_id)
     if not user or not user.is_active:
         raise HTTPException(401, "사용할 수 없는 계정입니다.")
-    row.revoked_at = utcnow()  # 갱신 토큰 회전
+    row.rotated_at = row.rotated_at or now
     data = issue_session(db, user, request)
     db.commit()
     return data

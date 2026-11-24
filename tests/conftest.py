@@ -1,14 +1,11 @@
 """통합 테스트 공통 설정. 실제 PostgreSQL + Alembic 마이그레이션 + 실제 에이전트 코드(모의 장비)를 사용한다."""
-import io
 import os
-import struct
 import sys
 import tempfile
 import uuid
-import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-for sub in ("backend", "android-engine", "device-agent"):
+for sub in ("backend", "android-engine", "device-agent", "tests"):
     sys.path.insert(0, os.path.join(ROOT, sub))
 
 os.environ["APP_ENV"] = "test"
@@ -27,31 +24,7 @@ from sqlalchemy import text  # noqa: E402
 ADMIN_PW = os.environ["ADMIN_PASSWORD"]
 
 
-def make_apk(package: str, version_code: int = 1, version_name: str = "1.0", dex: bool = True, extra: dict | None = None) -> bytes:
-    """검증용 최소 APK(바이너리 AndroidManifest 포함)."""
-    strings = ["manifest", "package", "versionCode", "versionName", package, version_name]
-    blob, offsets = b"", []
-    for s in strings:
-        offsets.append(len(blob))
-        enc = s.encode("utf-16-le")
-        blob += struct.pack("<H", len(s)) + enc + b"\x00\x00"
-    blob += b"\x00" * (-len(blob) % 4)
-    header = 28
-    pool = struct.pack("<HHIIIIII", 0x0001, header, header + 4 * len(strings) + len(blob), len(strings), 0, 0,
-                       header + 4 * len(strings), 0) + struct.pack(f"<{len(strings)}I", *offsets) + blob
-    attrs = (struct.pack("<IIIHBBI", 0xFFFFFFFF, 1, 4, 8, 0, 0x03, 4) +
-             struct.pack("<IIIHBBI", 0xFFFFFFFF, 2, 0xFFFFFFFF, 8, 0, 0x10, version_code) +
-             struct.pack("<IIIHBBI", 0xFFFFFFFF, 3, 5, 8, 0, 0x03, 5))
-    elem = struct.pack("<HHIIIIIHHHHHH", 0x0102, 16, 16 + 20 + len(attrs), 1, 0xFFFFFFFF, 0xFFFFFFFF, 0, 20, 20, 3, 0, 0, 0) + attrs
-    manifest = struct.pack("<HHI", 0x0003, 8, 8 + len(pool) + len(elem)) + pool + elem
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("AndroidManifest.xml", manifest)
-        if dex:
-            zf.writestr("classes.dex", b"dex\n035\x00" + uuid.uuid4().bytes)
-        for name, data in (extra or {}).items():
-            zf.writestr(name, data)
-    return buf.getvalue()
+from apkfixture import make_apk  # noqa: E402,F401
 
 
 @pytest.fixture(scope="session")
