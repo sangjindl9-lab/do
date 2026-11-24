@@ -1,0 +1,15 @@
+name: Verify Deploy
+# 배포된 공개 주소 접속 검증(로그인 없이 확인 가능한 항목).
+on:
+  workflow_dispatch:
+    inputs:
+      base_url: { description: "공개 주소", required: true, default: "https://web-production-d2095c72.up.railway.app" }
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 공개 주소 접속 검증
+        run: python scripts/smoke_remote.py "${{ inputs.base_url }}"
