@@ -28,10 +28,11 @@ def check(name, ok, detail=""):
 
 assert base.startswith("https://"), "HTTPS 주소가 필요합니다"
 status, body, headers = call("/api/health")
+headers = {k.lower(): v for k, v in headers.items()}
 health = json.loads(body) if status == 200 else {}
 check("서버 헬스체크 /api/health", status == 200 and health.get("status") == "ok", body.decode()[:120])
 check("영구 저장소 쓰기 가능", health.get("storage_writable") is True)
-check("보안 헤더(HSTS·nosniff)", "max-age" in headers.get("Strict-Transport-Security", "") and headers.get("X-Content-Type-Options") == "nosniff")
+check("보안 헤더(HSTS·nosniff)", "max-age" in headers.get("strict-transport-security", "") and headers.get("x-content-type-options") == "nosniff")
 for path, name in (("/", "고객 웹사이트 메인"), ("/pricing", "요금제 페이지"), ("/login", "로그인 페이지"), ("/admin", "관리자 페이지"), ("/admin/login", "관리자 로그인 페이지")):
     status, body, _ = call(path)
     check(f"{name} {path}", status == 200 and b'<div id="root">' in body and b"/assets/index-" in body, f"HTTP {status}, {len(body)} bytes")
