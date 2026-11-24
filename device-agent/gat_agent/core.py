@@ -34,19 +34,27 @@ class Spool:
         os.makedirs(directory, exist_ok=True)
         self.lock = threading.Lock()
         self.seq = 0
+        self.inflight: set[str] = set()   # 지금 전송 시도 중인 항목(동기화 대상에서 제외)
 
     def put(self, kind: str, payload: dict) -> str:
         with self.lock:
             self.seq += 1
             name = f"{int(time.time() * 1000):015d}-{self.seq:05d}-{kind}.json"
+            self.inflight.add(name)
         tmp = os.path.join(self.dir, name + ".tmp")
         with open(tmp, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False)
         os.replace(tmp, os.path.join(self.dir, name))
         return name
 
+    def release(self, name: str) -> None:
+        with self.lock:
+            self.inflight.discard(name)
+
     def items(self) -> list[str]:
-        return sorted(n for n in os.listdir(self.dir) if n.endswith(".json"))
+        with self.lock:
+            busy = set(self.inflight)
+        return sorted(n for n in os.listdir(self.dir) if n.endswith(".json") and n not in busy)
 
     def read(self, name: str) -> dict:
         with open(os.path.join(self.dir, name), encoding="utf-8") as fh:
@@ -152,7 +160,10 @@ class Agent:
         """보관된 결과 전송. 서버가 받으면(또는 영구 거부하면) 삭제한다."""
         sent = 0
         for name in self.spool.items():
-            item = self.spool.read(name)
+            try:
+                item = self.spool.read(name)
+            except (FileNotFoundError, ValueError):
+                continue
             try:
                 if name.endswith("-shot.json"):
                     self.api.screenshot(item["job_id"], item["lease_token"], item["label"], base64.b64decode(item["data"]))
@@ -197,6 +208,8 @@ class Agent:
         except ApiError as exc:
             self.spool.remove(name)
             self._error(f"서버가 데이터를 거부했습니다: {exc.message}")
+        finally:
+            self.spool.release(name)
 
     def _run_job(self, job: dict) -> None:
         job_id, serial, lease, payload = job["id"], job["serial"], job["lease_token"], job["payload"]
@@ -350,7 +363,11 @@ class Agent:
         threading.Thread(target=self._ws_loop, daemon=True, name="ws").start()
         backoff = self.cfg.heartbeat_sec
         while not self.stop_event.is_set():
-            self.tick()
+            try:
+                self.tick()
+            except Exception as exc:  # noqa: BLE001 - 한 주기의 오류로 에이전트가 멈추지 않게 한다
+                log.exception("tick failed")
+                self._error(f"주기 처리 오류: {exc.__class__.__name__}: {exc}")
             backoff = self.cfg.heartbeat_sec if self.connected else min(120, backoff * 2)  # 연결 장애 시 지수 백오프 재연결
             self.wake_event.wait(backoff)
             self.wake_event.clear()
