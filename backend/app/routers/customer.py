@@ -297,7 +297,7 @@ def install_request(plan_id: int, customer: Customer = Depends(current_customer)
         raise HTTPException(400, "기기가 배정된 뒤에 설치를 요청할 수 있습니다.")
     if db.scalar(select(TestJob.id).where(TestJob.plan_id == plan.id, TestJob.status.in_(["queued", "leased", "running"])).limit(1)):
         raise HTTPException(409, "이미 진행 중인 작업이 있습니다. 예약 작업 목록을 확인해 주세요.")
-    n = order_svc.create_jobs_for_run(db, plan, "I" + utcnow().strftime("%Y%m%dT%H%M%S"), "install")
+    n = order_svc.create_jobs_for_run(db, plan, "I" + utcnow().strftime("%Y%m%dT%H%M%S%f"), "install")
     if plan.status == "scheduled":
         plan.status, plan.order.status = "running", "running"
     db.commit()
