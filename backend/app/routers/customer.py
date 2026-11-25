@@ -4,7 +4,7 @@ import io
 import json
 import re
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
@@ -20,10 +20,21 @@ from ..models import (App, AppFile, AppVersion, CrashLog, Customer, Device, Devi
                       TestResult, TestScenario, TestSchedule, TesterInvite, TicketMessage, User)
 from ..security import check_path_signature, decrypt, encrypt, sign_path
 from ..services import orders as order_svc
-from ..services import storage
+from ..services import playstore, storage
 from ..services.reports import KINDS, generate_report
 
 router = APIRouter(prefix="/api", tags=["customer"])
+KST = timezone(timedelta(hours=9))
+PLAY_ID_RE = re.compile(r"[?&]id=([A-Za-z0-9_.]+)")
+
+
+def package_from(text: str) -> str:
+    """Play Store 링크 또는 패키지명에서 패키지명을 꺼낸다."""
+    text = (text or "").strip()
+    m = PLAY_ID_RE.search(text) if "play.google.com" in text else None
+    return m.group(1) if m else text
+
+
 PACKAGE_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 SCENARIO_ACTIONS = {"launch", "find", "tap", "input", "scroll", "back", "home", "wait", "screenshot",
                     "assert_exists", "assert_text", "assert_no_error", "stop"}
@@ -67,7 +78,7 @@ def version_view(v: AppVersion) -> dict:
 
 
 class AppIn(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
+    name: str = Field("", max_length=160)
     package_name: str
     play_url: str = ""
     closed_test_url: str = ""
@@ -103,11 +114,38 @@ def list_apps(customer: Customer = Depends(current_customer), db: Session = Depe
     return [app_view(a) for a in apps]
 
 
+class LookupIn(BaseModel):
+    package_name: str
+    locale: str = "ko"
+
+
+@router.post("/apps/lookup")
+def lookup_app(body: LookupIn, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """패키지명으로 Google Play 공개 스토어 정보를 불러온다(공개된 앱만 조회됨)."""
+    pkg = package_from(body.package_name)
+    if not PACKAGE_RE.match(pkg) or len(pkg) > 255:
+        raise HTTPException(400, "Play Store 링크 또는 패키지명(com.example.app)을 입력해 주세요.")
+    info = playstore.fetch_listing(pkg, body.locale if body.locale in ("ko", "en") else "ko")
+    info["package_name"] = pkg
+    info["registered"] = bool(db.scalar(select(App.id).where(App.customer_id == customer.id, App.package_name == pkg)))
+    return info
+
+
 @router.post("/apps")
 def create_app(body: AppIn, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
-    pkg = body.package_name.strip()
+    pkg = package_from(body.package_name)
     if not PACKAGE_RE.match(pkg) or len(pkg) > 255:
         raise HTTPException(400, "패키지명 형식이 올바르지 않습니다. 예: com.example.app")
+    listing = {"found": False}
+    if not body.name.strip() or not body.play_url:
+        listing = playstore.fetch_listing(pkg)
+    if not body.name.strip():
+        if not listing.get("found"):
+            raise HTTPException(400, "Google Play에서 앱 정보를 찾지 못했습니다(비공개 테스트 단계 앱은 조회되지 않습니다). 앱 이름을 직접 입력해 주세요.")
+        body.name = listing["name"]
+    if listing.get("found"):
+        body.play_url = body.play_url or listing["play_url"]
+        body.description = body.description or listing.get("description", "")
     if not body.ownership_confirmed:
         raise HTTPException(400, "검사 권한을 보유한 앱만 등록할 수 있습니다. 권한 확인에 동의해 주세요.")
     if db.scalar(select(App.id).where(App.customer_id == customer.id, App.package_name == pkg)):
@@ -115,6 +153,16 @@ def create_app(body: AppIn, customer: Customer = Depends(current_customer), db: 
     app = App(customer_id=customer.id, package_name=pkg, name=body.name)
     _apply_app(app, body)
     db.add(app)
+    db.flush()
+    icon = playstore.fetch_icon(listing["icon"]) if listing.get("icon") else None
+    if icon:
+        rel, size, sha = storage.save_bytes(icon, "icons", ".png")
+        row = AppFile(app_id=app.id, customer_id=customer.id, kind="icon", filename="play-icon", path=rel, size=size, sha256=sha)
+        db.add(row)
+        db.flush()
+        app.icon_file_id = row.id
+    # Play 스토어(비공개 트랙)에서 설치하는 검사용 기본 버전. APK를 올리지 않아도 바로 신청할 수 있다.
+    db.add(AppVersion(app_id=app.id, version_name="Play 스토어 배포본", version_code=0, notes="기기가 Play 스토어에서 설치한 버전을 검사"))
     db.commit()
     db.refresh(app)
     return app_view(app)
@@ -218,6 +266,74 @@ async def add_version(app_id: int, version_name: str = Form(...), version_code: 
     db.commit()
     db.refresh(version)
     return {**version_view(version), "warning": warning}
+
+
+@router.get("/tester-accounts")
+def tester_accounts(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """검사 기기에 로그인된 Google 계정 목록. 고객이 Play Console 비공개 테스트의 테스터 목록에 추가해야
+    기기가 비공개 트랙의 앱을 Play 스토어에서 설치할 수 있다. 실기기만 포함한다."""
+    rows = db.scalars(select(Device.google_account_email).where(
+        Device.is_mock.is_(False), Device.enabled.is_(True), Device.google_account_email != "",
+        Device.google_account_email.isnot(None)).distinct().order_by(Device.google_account_email)).all()
+    return {"emails": rows, "count": len(rows),
+            "notice": "이 계정들은 본 서비스가 운영하는 검사 기기의 계정이며 자동화 검사에 사용됩니다. 독립적인 사람 테스터가 아닙니다."}
+
+
+@router.get("/tester-accounts.csv")
+def tester_accounts_csv(customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """Play Console '이메일 목록 만들기 > CSV 업로드'에 그대로 올릴 수 있는 형식(한 줄에 주소 하나)."""
+    emails = tester_accounts(customer, db)["emails"]
+    return Response("\n".join(emails) + ("\n" if emails else ""), media_type="text/csv",
+                    headers={"Content-Disposition": 'attachment; filename="test-device-accounts.csv"'})
+
+
+@router.get("/apps/{app_id}/overview")
+def app_overview(app_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """앱 상세: 현재 상태, 일정, 예약 작업, 리포트, 일별 실행 기록(기기별 실행 화면)."""
+    app = own_app(db, customer, app_id)
+    plan = db.scalar(select(TestPlan).where(TestPlan.app_id == app.id, TestPlan.status != "cancelled").order_by(TestPlan.id.desc()).limit(1))
+    pending = db.scalar(select(Order).where(Order.app_id == app.id, Order.status == "pending_payment").order_by(Order.id.desc()).limit(1))
+    now = utcnow()
+    start_day = None
+    if app.closed_test_started_on:
+        try:
+            start_day = datetime.strptime(app.closed_test_started_on, "%Y-%m-%d").date()
+        except ValueError:
+            start_day = None
+    out = {"app": app_view(app), "plan": None, "pending_order_id": pending.id if pending else None, "queue": [], "days": [],
+           "closed_test_started_on": app.closed_test_started_on,
+           "production_eligible_on": (start_day + timedelta(days=14)).isoformat() if start_day else None,
+           "report": {"day_no": None, "devices": 0, "runs": 0}}
+    if not plan:
+        return out
+    brief = plan_brief(db, plan)
+    day_no = max(1, (min(now, plan.end_at) - plan.start_at).days + 1) if plan.status in ("running", "paused", "completed") else None
+    out["plan"] = {**brief, "order_id": plan.order_id, "order_no": plan.order.order_no, "product": plan.order.product_snapshot["name"], "day_no": day_no}
+    jobs = db.scalars(select(TestJob).where(TestJob.plan_id == plan.id, TestJob.status.in_(["queued", "leased", "running"]))
+                      .order_by(TestJob.next_attempt_at, TestJob.id).limit(60)).unique().all()
+    out["queue"] = [{"id": j.id, "status": j.status, "device": j.device.name or j.device.serial, "serial": j.device.serial,
+                     "at": j.next_attempt_at, "progress": j.progress} for j in jobs]
+    results = db.scalars(select(TestResult).where(TestResult.plan_id == plan.id).order_by(TestResult.id.desc()).limit(2000)).unique().all()
+    shots = {}
+    for sh in db.scalars(select(Screenshot).where(Screenshot.plan_id == plan.id, Screenshot.label == "앱 실행 직후").order_by(Screenshot.id)):
+        shots[sh.job_id] = sh.id
+    days: dict[str, dict] = {}
+    for r in results:
+        at = r.finished_at or r.created_at
+        key = at.astimezone(KST).strftime("%Y-%m-%d")
+        day = days.setdefault(key, {"day": key, "cells": {}, "first": at, "last": at})
+        day["first"], day["last"] = min(day["first"], at), max(day["last"], at)
+        if r.device_id in day["cells"]:
+            continue  # 기기당 그날의 가장 최근 실행을 보여준다
+        launched = any(s.get("key") == "launch" and s.get("status") == "passed" for s in r.steps or [])
+        day["cells"][r.device_id] = {"device": r.device.name or r.device.serial, "serial": r.device.serial, "at": at, "status": r.status,
+                                     "launched": launched, "crash": r.crash_count + r.anr_count > 0, "result_id": r.id,
+                                     "screenshot_url": file_url("screenshot", shots[r.job_id]) if r.job_id in shots else None}
+    out["days"] = [{"day": d["day"], "first": d["first"], "last": d["last"], "confirmed": sum(1 for c in d["cells"].values() if c["launched"]),
+                    "total": brief["assigned_devices"] or len(d["cells"]), "cells": sorted(d["cells"].values(), key=lambda c: c["serial"])}
+                   for d in sorted(days.values(), key=lambda x: x["day"], reverse=True)][:30]
+    out["report"] = {"day_no": day_no, "devices": len({r.device_id for r in results}), "runs": len(results)}
+    return out
 
 
 # ---------------- 시나리오 ----------------

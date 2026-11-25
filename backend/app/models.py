@@ -335,6 +335,7 @@ class Device(Base):
     enabled = Column(Boolean, default=True, nullable=False)
     maintenance = Column(Boolean, default=False, nullable=False)
     google_account_confirmed = Column(Boolean, default=False, nullable=False)
+    google_account_email = Column(String(255), default="")  # 기기에 로그인된 계정 주소(비밀번호는 저장하지 않음)
     is_mock = Column(Boolean, default=False, nullable=False)
     installed_apps = Column(JSON, default=dict)
     last_seen_at = TS()

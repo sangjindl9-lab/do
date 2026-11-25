@@ -380,6 +380,7 @@ function DeviceModal({ data, groups, onClose, onChanged }: { data: any; groups: 
         <Field label="기기 이름"><Input defaultValue={x.name} onBlur={(e) => e.target.value !== x.name && save({ name: e.target.value })} /></Field>
         <Field label="그룹"><Select value={x.group_id || ""} onChange={(e) => save(e.target.value ? { group_id: Number(e.target.value) } : { clear_group: true })}><option value="">없음</option>{groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Select></Field>
         <Field label="메모"><Input defaultValue={x.notes} onBlur={(e) => e.target.value !== x.notes && save({ notes: e.target.value })} /></Field>
+        <div className="sm:col-span-2"><Field label="기기에 로그인된 Google 계정 이메일" hint="고객에게 '검사 기기 계정 목록'으로 제공됩니다. 비밀번호는 입력·저장하지 않습니다"><Input type="email" defaultValue={x.google_account_email} placeholder="example@gmail.com" onBlur={(e) => e.target.value !== x.google_account_email && save({ google_account_email: e.target.value })} /></Field></div>
       </div>
       <div className="mt-4 flex flex-wrap gap-6"><Check label="사용 (해제 시 사용 중지)" checked={x.enabled} onChange={(e) => save({ enabled: e.target.checked })} /><Check label="유지보수 중" checked={x.maintenance} onChange={(e) => save({ maintenance: e.target.checked })} />
         <Check label="Google 계정 로그인 확인함 (운영자가 기기에서 직접 로그인 · 비밀번호는 저장하지 않음)" checked={x.google_account_confirmed} onChange={(e) => save({ google_account_confirmed: e.target.checked })} /></div>

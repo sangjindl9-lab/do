@@ -220,7 +220,7 @@ def run_job(provider: DeviceProvider, serial: str, payload: dict, apk_path: str 
         provider.logcat_clear(serial)
         # 1) 설치
         installed_ok = True
-        if "install" in checks or payload.get("apk"):
+        if "install" in checks or payload.get("apk") or provider.installed_version(serial, package) is None:
             t0 = time.monotonic()
             if apk_path:
                 ok, msg = provider.install(serial, apk_path)
@@ -229,9 +229,14 @@ def run_job(provider: DeviceProvider, serial: str, payload: dict, apk_path: str 
                     metrics.append({"metric": "install_ms", "value": int((time.monotonic() - t0) * 1000), "unit": "ms"})
             else:
                 current = provider.installed_version(serial, package)
-                steps.add("install", "not_run", "설치 성공", "APK 미제공: 설치 검사를 수행하지 않음" +
-                          (f" (기기에 {current} 설치됨)" if current else ""))
-                installed_ok = current is not None
+                if current:
+                    steps.add("install", "passed", "기기에 설치되어 있음", f"Play 스토어 설치본 {current}", started=t0, name="Play 스토어 설치")
+                else:
+                    ok, msg = provider.play_install(serial, package)
+                    steps.add("install", "passed" if ok else "failed", "Play 스토어에서 설치 성공", msg, started=t0, name="Play 스토어 설치")
+                    if ok:
+                        metrics.append({"metric": "install_ms", "value": int((time.monotonic() - t0) * 1000), "unit": "ms"})
+                installed_ok = provider.installed_version(serial, package) is not None
         version = provider.installed_version(serial, package)
         if not installed_ok or version is None:
             if version is None and installed_ok:

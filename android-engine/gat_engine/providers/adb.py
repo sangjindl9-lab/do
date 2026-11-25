@@ -105,6 +105,31 @@ class AdbProvider(DeviceProvider):
         code = re.search(r"(INSTALL_[A-Z_]+)[^\n]*", out)
         return False, (code.group(0) if code else out.strip())[:400]
 
+    def play_install(self, serial, package, timeout: int = 240):
+        """Play 스토어 앱 상세 화면을 열어 '설치' 버튼을 누르고 설치 완료를 기다린다.
+        기기 계정이 해당 앱의 테스터로 등록·참여되어 있어야 비공개 트랙 앱이 보인다."""
+        import time
+        self._pkg(package)
+        self._sh(serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", f"market://details?id={package}", "com.android.vending")
+        deadline, tapped = time.monotonic() + timeout, False
+        while time.monotonic() < deadline:
+            if self.installed_version(serial, package):
+                self.key(serial, "HOME")
+                return True, "Play 스토어에서 설치됨"
+            xml = self.dump_ui(serial)
+            if not tapped:
+                m = re.search(r'(?:text|content-desc)="(?:설치|Install|업데이트|Update)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+                if m:
+                    x1, y1, x2, y2 = map(int, m.groups())
+                    self.tap(serial, (x1 + x2) // 2, (y1 + y2) // 2)
+                    tapped = True
+                elif re.search(r"찾을 수 없|not found|isn't available|사용할 수 없", xml):
+                    self.key(serial, "HOME")
+                    return False, "Play 스토어에서 앱을 찾을 수 없음(테스터 등록·참여 여부 확인 필요)"
+            time.sleep(3)
+        self.key(serial, "HOME")
+        return False, "Play 스토어 설치 시간 초과" if tapped else "Play 스토어에서 설치 버튼을 찾지 못함(테스터 등록·참여 여부 확인 필요)"
+
     def uninstall(self, serial, package):
         out = self._run(["-s", serial, "uninstall", self._pkg(package)], 120)
         return "Success" in out, out.strip()[:300]

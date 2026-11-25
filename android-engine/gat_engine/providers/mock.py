@@ -70,6 +70,13 @@ class MockProvider(DeviceProvider):
     def prepare(self, package: str, version: str) -> None:
         self._pending_pkg, self._pending_version = package, version
 
+    def play_install(self, serial, package):
+        dev = self._dev(serial)
+        if self.faults.get(serial) == "install_fail":
+            return False, "Play 스토어에서 앱을 찾을 수 없음 (MOCK)"
+        dev["installed"][package] = self._pending_version or "play"
+        return True, "Play 스토어에서 설치됨 (MOCK)"
+
     def uninstall(self, serial, package):
         dev = self._dev(serial)
         dev["running"].discard(package)

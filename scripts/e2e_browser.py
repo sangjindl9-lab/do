@@ -90,12 +90,16 @@ def main():
             # 2) 앱 등록
             page.goto(base + "/dashboard/apps")
             page.click("button:has-text('앱 등록')")
-            page.locator("label:has-text('앱 이름') input").fill("E2E 테스트앱")
-            page.locator("label:has-text('패키지명') input").fill(package)
-            page.locator("[role=dialog] input[type=checkbox]").check()
-            page.click("[role=dialog] button:has-text('저장')")
+            page.locator("label:has-text('Play Store 링크 또는 패키지명') input").fill(f"https://play.google.com/store/apps/details?id={package}")
+            page.click("[role=dialog] button:has-text('불러오기')")
+            # 스토어에 없는 앱(비공개 단계)은 이름을 직접 입력한다
+            page.locator("[role=dialog] label:has-text('앱 이름') input").fill("E2E 테스트앱")
+            page.locator("[role=dialog] input[type=checkbox]").last.check()
+            page.click("[role=dialog] button:has-text('등록')")
             page.wait_for_url("**/dashboard/apps/*")
+            app_url = page.url
             # 3) APK 업로드(진행률 표시 포함)
+            page.click("summary:has-text('버전·APK 파일')")
             page.locator("label:has-text('앱 버전') input").fill("1.0")
             page.locator("label:has-text('버전 코드') input").fill("1")
             page.set_input_files('input[type="file"][accept=".apk"]', apk_path)
@@ -105,6 +109,7 @@ def main():
             page.goto(base + "/dashboard/new-test")
             page.locator("label:has-text('앱') select").first.select_option(index=1)
             page.wait_for_timeout(500)
+            page.locator("label:has-text('검사할 버전') select").select_option(label="1.0 (1)")
             page.locator("label:has-text('PRO')").first.click()
             page.wait_for_selector("text=14,900원")
             shot("new-test")
@@ -130,6 +135,14 @@ def main():
             ws = [a for a in api.get("/admin/agents", headers=admin_headers()).json() if a["id"] == agent["id"]][0]
             if not ws["ws_connected"]:
                 problems.append("에이전트 WebSocket 미연결")
+            page.goto(app_url)
+            page.wait_for_selector("text=일별 실행 기록")
+            page.wait_for_selector("section img")
+            if page.locator("section img").count() < 20:
+                problems.append("앱 상세의 일별 실행 화면이 20칸 미만")
+            page.wait_for_load_state("networkidle")
+            if args.shots:
+                page.screenshot(path=os.path.join(args.shots, "app-detail.png"), full_page=True)
             for tab in ("status", "devices", "results", "crashes", "screenshots", "reports"):
                 page.goto(f"{order_url}?tab={tab}")
                 page.wait_for_load_state("networkidle")

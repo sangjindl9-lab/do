@@ -158,6 +158,15 @@ def test_job_claim_run_and_store_results(client, admin, customer, mock_pg, farm,
     assert client.get(shots[0]["url"].split("sig=")[0] + "sig=tampered").status_code == 403
     dash = client.get("/api/dashboard", headers=customer.h).json()
     assert dash["runs_total"] == 5 and dash["apps"] == 1
+    # 앱 상세(현재 상태·리포트·일별 실행 기록)
+    ov = client.get(f"/api/apps/{app['id']}/overview", headers=customer.h).json()
+    assert ov["plan"]["status"] == "running" and ov["plan"]["day_no"] == 1 and ov["report"] == {"day_no": 1, "devices": 5, "runs": 5}
+    day = ov["days"][0]
+    assert day["total"] == 5 and len(day["cells"]) == 5 and day["confirmed"] == len(ok)
+    cell = next(c for c in day["cells"] if c["serial"] != crash_serial)
+    assert cell["launched"] and client.get(cell["screenshot_url"]).content.startswith(b"\x89PNG")
+    from conftest import Cust
+    assert client.get(f"/api/apps/{app['id']}/overview", headers=Cust(client).h).status_code == 404
     farm.provider.faults.clear()
     client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
 

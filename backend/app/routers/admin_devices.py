@@ -131,7 +131,7 @@ def device_view(d: Device, job: TestJob | None = None, plans: int = 0) -> dict:
             "storage_total_mb": d.storage_total_mb, "storage_free_mb": d.storage_free_mb, "battery": d.battery,
             "temperature": d.temperature, "resolution": d.resolution, "network": d.network, "conn_state": d.conn_state,
             "status": d.status, "enabled": d.enabled, "maintenance": d.maintenance,
-            "google_account_confirmed": d.google_account_confirmed, "is_mock": d.is_mock, "installed_apps": d.installed_apps or {},
+            "google_account_confirmed": d.google_account_confirmed, "google_account_email": d.google_account_email or "", "is_mock": d.is_mock, "installed_apps": d.installed_apps or {},
             "last_seen_at": d.last_seen_at, "last_test_at": d.last_test_at, "notes": d.notes, "active_plans": plans,
             "current_job": {"id": job.id, "progress": job.progress, "package": (job.payload or {}).get("package"),
                             "plan_id": job.plan_id} if job else None}
@@ -184,6 +184,7 @@ class DevicePatch(BaseModel):
     enabled: bool | None = None
     maintenance: bool | None = None
     google_account_confirmed: bool | None = None
+    google_account_email: str | None = Field(None, max_length=255)
     notes: str | None = None
 
 
@@ -194,6 +195,10 @@ def patch_device(did: int, body: DevicePatch, request: Request, db: Session = De
     if not d:
         raise HTTPException(404, "기기를 찾을 수 없습니다.")
     data = body.model_dump(exclude_none=True, exclude={"clear_group"})
+    if "google_account_email" in data:
+        data["google_account_email"] = data["google_account_email"].strip().lower()
+        if data["google_account_email"] and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", data["google_account_email"]):
+            raise HTTPException(400, "이메일 형식이 올바르지 않습니다.")
     for k, v in data.items():
         setattr(d, k, v)
     if body.clear_group:

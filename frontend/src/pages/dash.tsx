@@ -58,35 +58,89 @@ export function Overview() {
 // ---------------- 앱 ----------------
 const EMPTY_APP = { name: "", package_name: "", play_url: "", closed_test_url: "", google_group: "", description: "", request_notes: "", languages: [] as string[], test_login_id: "", test_login_password: "", ownership_confirmed: false, closed_test_started_on: "", improvements: "" };
 
+const PRECHECK = ["Play Console의 비공개 테스트 트랙에 앱을 출시했습니다", "검사 기기 계정 목록을 테스터로 추가했고 앱 검토가 끝났습니다",
+  "출시 국가에 대한민국이 포함되어 있습니다", "앱의 최소 지원 버전이 검사 기기의 Android 버전 이하입니다"];
+
 function AppForm({ initial, onSaved, onClose }: { initial?: any; onSaved: (app: any) => void; onClose: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const a = useAction();
   const [f, setF] = useState<any>(initial ? { ...EMPTY_APP, ...initial, test_login_id: "", test_login_password: "" } : EMPTY_APP);
-  const set = (k: string, v: any) => setF({ ...f, [k]: v });
+  const [info, setInfo] = useState<any>(null);
+  const [checks, setChecks] = useState<boolean[]>(PRECHECK.map(() => false));
+  const [looking, setLooking] = useState(false);
+  const accounts = useLoad(() => get("/tester-accounts"));
+  const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
+  const lookup = async () => {
+    if (initial || !f.package_name.trim()) return;
+    setLooking(true); a.setError("");
+    try {
+      const r = await post("/apps/lookup", { package_name: f.package_name, locale });
+      setInfo(r);
+      setF((p: any) => ({ ...p, package_name: r.package_name, name: r.found ? r.name : p.name, play_url: r.found ? r.play_url : p.play_url }));
+    } catch (e: any) { setInfo(null); a.setError(e.message); } finally { setLooking(false); }
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const body = { ...f, languages: typeof f.languages === "string" ? f.languages.split(",").map((s: string) => s.trim()).filter(Boolean) : f.languages };
+    const body = { ...f, languages: typeof f.languages === "string" ? f.languages.split(",").map((x: string) => x.trim()).filter(Boolean) : f.languages };
     if (initial && !f.test_login_id && !f.test_login_password) { delete body.test_login_id; delete body.test_login_password; }
     const app = await a.run(() => (initial ? put(`/apps/${initial.id}`, body) : post("/apps", body)));
     if (app) onSaved(app);
   };
+  const needName = !initial && info && !info.found;
   return (
-    <Modal title={initial ? "앱 정보 수정" : "앱 등록"} onClose={onClose} wide>
-      <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-        <Field label="앱 이름"><Input value={f.name} onChange={(e) => set("name", e.target.value)} required /></Field>
-        <Field label="패키지명" hint="예: com.example.app"><Input className="font-mono" value={f.package_name} onChange={(e) => set("package_name", e.target.value)} required disabled={!!initial} /></Field>
-        <Field label="Google Play 주소"><Input value={f.play_url} onChange={(e) => set("play_url", e.target.value)} placeholder="https://" /></Field>
-        <Field label="비공개 테스트 안내 링크"><Input value={f.closed_test_url} onChange={(e) => set("closed_test_url", e.target.value)} placeholder="https://" /></Field>
-        <Field label="지원 언어" hint="쉼표로 구분"><Input value={Array.isArray(f.languages) ? f.languages.join(", ") : f.languages} onChange={(e) => set("languages", e.target.value)} placeholder="ko, en" /></Field>
-        <Field label="Google Groups"><Input value={f.google_group} onChange={(e) => set("google_group", e.target.value)} /></Field>
-        <Field label="테스트용 로그인 아이디" hint={initial?.has_test_login ? "저장되어 있음. 변경할 때만 입력" : "암호화하여 저장"}><Input value={f.test_login_id} onChange={(e) => set("test_login_id", e.target.value)} autoComplete="off" /></Field>
-        <Field label="테스트용 로그인 비밀번호"><Input type="password" value={f.test_login_password} onChange={(e) => set("test_login_password", e.target.value)} autoComplete="new-password" /></Field>
-        <div className="sm:col-span-2"><Field label="앱 설명"><Textarea value={f.description} onChange={(e) => set("description", e.target.value)} /></Field></div>
-        <div className="sm:col-span-2"><Field label="검사 요청사항"><Textarea value={f.request_notes} onChange={(e) => set("request_notes", e.target.value)} /></Field></div>
-        <div className="sm:col-span-2"><Check checked={f.ownership_confirmed} disabled={initial?.ownership_confirmed} onChange={(e) => set("ownership_confirmed", e.target.checked)} label={t("이 앱의 소유자이거나 검사 권한을 보유하고 있음을 확인합니다")} /></div>
-        <div className="space-y-3 sm:col-span-2"><Msg a={a} /><div className="flex justify-end gap-2"><Button type="button" onClick={onClose}>{t("취소")}</Button><Button variant="primary" disabled={a.busy}>{t("저장")}</Button></div></div>
+    <Modal title={initial ? "앱 정보 수정" : "새 앱 등록"} onClose={onClose} wide>
+      <form onSubmit={submit} className="space-y-5">
+        {!initial && <>
+          <Field label="Play Store 링크 또는 패키지명" hint="링크나 패키지명(com.example.app)을 넣으면 앱 정보를 자동으로 불러옵니다">
+            <div className="flex gap-2"><Input autoFocus value={f.package_name} onChange={(e) => { set("package_name", e.target.value); setInfo(null); }} onBlur={lookup} placeholder="https://play.google.com/store/apps/details?id=" required />
+              <Button type="button" onClick={lookup} disabled={looking || !f.package_name.trim()}>{t(looking ? "불러오는 중" : "불러오기")}</Button></div>
+          </Field>
+          {info?.found && <div className="flex items-center gap-3 rounded-ctl border border-line bg-raised p-3">{info.icon ? <img src={info.icon} alt="" referrerPolicy="no-referrer" className="h-11 w-11 rounded-ctl border border-line" /> : <span className="h-11 w-11 rounded-ctl bg-card" />}
+            <div className="min-w-0"><div className="truncate font-medium">{info.name}</div><div className="num truncate text-xs text-mute">{info.package_name}</div></div></div>}
+          {info?.registered && <Notice tone="warn">{t("이미 등록한 앱입니다")}</Notice>}
+          {needName && <><Notice tone="warn">{t("Google Play 공개 페이지에서 앱을 찾지 못했습니다. 비공개 테스트 단계의 앱은 조회되지 않으니 앱 이름을 직접 입력해 주세요")}</Notice>
+            <Field label="앱 이름"><Input value={f.name} onChange={(e) => set("name", e.target.value)} required /></Field></>}
+          <fieldset className="rounded-card border border-line p-4">
+            <legend className="px-1 text-[13px] font-medium">{t("앱 등록 전 확인해 주세요")}</legend>
+            <div className="space-y-2.5">{PRECHECK.map((c, i) => <Check key={c} label={t(c)} checked={checks[i]} onChange={(e) => setChecks(checks.map((v, j) => (j === i ? e.target.checked : v)))} />)}</div>
+            <p className="mt-3 text-xs leading-5 text-mute">{t("APK 파일을 직접 올려 검사할 때는 위 항목이 필요하지 않습니다. 등록 후 앱 화면에서 APK를 올릴 수 있습니다")}</p>
+            {accounts.data && <p className="num mt-2 text-xs text-sub">{t("검사 기기 계정")} {accounts.data.count}{t("개")} · {t("등록 후 앱 화면에서 목록을 복사할 수 있습니다")}</p>}
+          </fieldset>
+        </>}
+        {initial && <Field label="앱 이름"><Input value={f.name} onChange={(e) => set("name", e.target.value)} required /></Field>}
+        <details className="rounded-card border border-line px-4 py-3" open={!!initial}>
+          <summary className="cursor-pointer text-[13px] text-sub">{t("추가 정보 (선택)")}</summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Field label="Google Play 주소"><Input value={f.play_url} onChange={(e) => set("play_url", e.target.value)} placeholder="https://" /></Field>
+            <Field label="비공개 테스트 안내 링크"><Input value={f.closed_test_url} onChange={(e) => set("closed_test_url", e.target.value)} placeholder="https://" /></Field>
+            <Field label="테스트용 로그인 아이디" hint={initial?.has_test_login ? "저장되어 있음. 변경할 때만 입력" : "암호화하여 저장"}><Input value={f.test_login_id} onChange={(e) => set("test_login_id", e.target.value)} autoComplete="off" /></Field>
+            <Field label="테스트용 로그인 비밀번호"><Input type="password" value={f.test_login_password} onChange={(e) => set("test_login_password", e.target.value)} autoComplete="new-password" /></Field>
+            <Field label="지원 언어" hint="쉼표로 구분"><Input value={Array.isArray(f.languages) ? f.languages.join(", ") : f.languages} onChange={(e) => set("languages", e.target.value)} placeholder="ko, en" /></Field>
+            <Field label="Google Groups"><Input value={f.google_group} onChange={(e) => set("google_group", e.target.value)} /></Field>
+            <div className="sm:col-span-2"><Field label="앱 설명"><Textarea value={f.description} onChange={(e) => set("description", e.target.value)} /></Field></div>
+            <div className="sm:col-span-2"><Field label="검사 요청사항"><Textarea value={f.request_notes} onChange={(e) => set("request_notes", e.target.value)} /></Field></div>
+          </div>
+        </details>
+        <Check checked={f.ownership_confirmed} disabled={initial?.ownership_confirmed} onChange={(e) => set("ownership_confirmed", e.target.checked)} label={t("이 앱의 소유자이거나 검사 권한을 보유하고 있음을 확인합니다")} />
+        <Msg a={a} />
+        <Button variant="primary" size="lg" className="w-full" disabled={a.busy || !f.ownership_confirmed || info?.registered}>{t(initial ? "저장" : "등록")}</Button>
       </form>
     </Modal>
+  );
+}
+
+function TesterAccounts() {
+  const { t } = useI18n();
+  const d = useLoad(() => get("/tester-accounts"));
+  const [copied, setCopied] = useState(false);
+  const list: string[] = d.data?.emails || [];
+  return (
+    <Card title={<>{t("검사 기기 계정 목록")} <span className="num ml-2 text-mute">{list.length}</span></>} action={<span className="flex gap-2"><Button size="sm" disabled={!list.length} onClick={() => download("/tester-accounts.csv", "test-device-accounts.csv")}>{t("CSV 받기")}</Button><Button size="sm" disabled={!list.length} onClick={() => { navigator.clipboard.writeText(list.join(", ")); setCopied(true); }}>{t(copied ? "복사됨" : "전체 복사")}</Button></span>}>
+      <ol className="list-decimal space-y-1 pl-5 text-sm text-sub"><li>{t("CSV를 받아 Play Console > 테스트 > 비공개 테스트 > 테스터 > 이메일 목록 만들기에 올립니다. 목록의 계정을 모두 추가해야 모든 기기에 설치됩니다")}</li><li>{t("변경사항을 저장하고 앱 검토가 끝나면 테스트를 신청합니다")}</li><li>{t("검사 기기가 Play 스토어에서 앱을 설치해 검사합니다")}</li></ol>
+      {list.length ? <textarea readOnly value={list.join("\n")} rows={Math.min(8, list.length)} className="mt-4 w-full rounded-ctl border border-line bg-raised p-3 font-mono text-[13px]" onFocus={(e) => e.target.select()} /> :
+        <div className="mt-4"><Notice tone="warn">{t("아직 등록된 검사 기기 계정이 없습니다. APK 파일을 올려 검사하는 방식은 지금도 이용할 수 있습니다")}</Notice></div>}
+      <p className="mt-3 text-xs leading-5 text-mute">{t("이 계정들은 본 서비스가 운영하는 검사 기기의 계정이며 자동화 검사에 사용됩니다. 독립적인 사람 테스터가 아닙니다")}</p>
+    </Card>
   );
 }
 
@@ -135,7 +189,7 @@ function VersionUpload({ app, onDone }: { app: any; onDone: () => void }) {
     <form onSubmit={submit} className="grid gap-4 sm:grid-cols-[1fr_1fr_2fr]">
       <Field label="앱 버전"><Input value={f.version_name} onChange={(e) => setF({ ...f, version_name: e.target.value })} placeholder="1.0.0" required /></Field>
       <Field label="버전 코드"><Input type="number" min={1} value={f.version_code} onChange={(e) => setF({ ...f, version_code: e.target.value })} required /></Field>
-      <Field label="APK 파일" hint="APK가 없으면 설치 검사는 '미수행'으로 기록됩니다"><input type="file" accept=".apk" onChange={(e) => setFile(e.target.files?.[0] || null)} className="block h-9 w-full text-[13px] text-sub file:mr-3 file:h-9 file:rounded-ctl file:border file:border-line file:bg-card file:px-3 file:text-[13px]" /></Field>
+      <Field label="APK 파일" hint="APK를 올리면 스토어를 거치지 않고 이 파일을 설치해 검사합니다"><input type="file" accept=".apk" onChange={(e) => setFile(e.target.files?.[0] || null)} className="block h-9 w-full text-[13px] text-sub file:mr-3 file:h-9 file:rounded-ctl file:border file:border-line file:bg-card file:px-3 file:text-[13px]" /></Field>
       <div className="sm:col-span-3"><Field label="변경 내용"><Input value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field></div>
       <div className="space-y-3 sm:col-span-3">
         {pct !== null && <div><Progress value={pct} /><div className="num mt-1 text-xs text-mute">{t("업로드")} {pct}%</div></div>}
@@ -147,69 +201,138 @@ function VersionUpload({ app, onDone }: { app: any; onDone: () => void }) {
   );
 }
 
+const kst = (v: string) => new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" });
+
 export function AppDetail() {
   const { t } = useI18n();
   const { id } = useParams();
   const nav = useNavigate();
   const app = useLoad(() => get(`/apps/${id}`), [id]);
+  const ov = useLoad(() => get(`/apps/${id}/overview`), [id], 30000);
   const ct = useLoad(() => get(`/apps/${id}/closed-test`), [id]);
   const [edit, setEdit] = useState(false);
   const [emails, setEmails] = useState("");
   const [notes, setNotes] = useState("");
+  const [zoom, setZoom] = useState<any>(null);
   const a = useAction();
   const iconRef = useRef<HTMLInputElement>(null);
   if (!app.data) return <p className="text-mute">{app.error || t("불러오는 중")}</p>;
   const x = app.data;
-  const reloadAll = () => { app.reload(); ct.reload(); };
+  const o = ov.data;
+  const plan = o?.plan;
+  const reloadAll = () => { app.reload(); ct.reload(); ov.reload(); };
+  const saveApp = (patchObj: any) => put(`/apps/${id}`, { ...x, ...patchObj }).then(reloadAll);
+  const state = plan ? plan.status : o?.pending_order_id ? "pending_payment" : "none";
+  const stateText: Record<string, string> = { none: "테스트를 신청하면 검사가 시작됩니다", pending_payment: "결제를 마치면 기기가 배정됩니다", waiting_devices: "검사 기기 배정을 기다리고 있습니다",
+    scheduled: "기기가 배정되었고 첫 검사를 기다리고 있습니다", running: "검사 기기에서 매일 자동 검사가 진행 중입니다", paused: "검사가 일시정지되었습니다", completed: "검사 기간이 종료되었습니다" };
   return (
     <>
-      <PageHead title={x.name} desc={x.package_name} action={<div className="flex gap-2">
-        <input ref={iconRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const fd = new FormData(); fd.append("file", f); a.run(() => upload(`/apps/${id}/icon`, fd, () => {})).then(app.reload); }} />
-        <Button onClick={() => iconRef.current?.click()}>{t("아이콘 변경")}</Button><Button onClick={() => setEdit(true)}>{t("정보 수정")}</Button>
-        <Button variant="danger" onClick={() => confirm(t("이 앱을 삭제할까요?")) && a.run(() => del(`/apps/${id}`)).then((r) => r && nav("/dashboard/apps"))}>{t("삭제")}</Button>
-        <Link to={`/dashboard/new-test?app=${id}`}><Button variant="primary">{t("테스트 신청")}</Button></Link></div>} />
+      <div className="mb-6 flex flex-wrap items-center gap-4">
+        <button onClick={() => nav("/dashboard/apps")} className="text-sm text-sub hover:text-ink">← {t("앱 목록")}</button>
+        {x.icon_url ? <img src={x.icon_url} alt="" className="h-14 w-14 rounded-card border border-line object-cover" /> : <span className="h-14 w-14 rounded-card bg-raised" />}
+        <div className="min-w-0 flex-1"><h1 className="truncate text-[24px] font-medium leading-tight">{x.name}</h1><p className="num mt-1 truncate text-[13px] text-mute">{x.package_name}</p></div>
+        {plan && <span className="rounded-ctl border border-line px-2.5 py-1 text-[13px] text-sub">{plan.product}</span>}
+      </div>
       <div className="space-y-4">
         <Msg a={a} />
-        <Card title={t("버전 이력")} pad={false}>
-          <Table rows={x.versions} empty="등록된 버전이 없습니다" cols={[
-            { key: "version_name", label: "버전", mono: true }, { key: "version_code", label: "버전 코드", mono: true },
-            { key: "file", label: "APK", render: (r) => (r.file ? <span className="num text-sub">{r.file.filename} · {size(r.file.size)}</span> : <span className="text-mute">{t("미등록")}</span>) },
-            { key: "sha", label: "SHA-256", mono: true, render: (r) => (r.file ? <span title={r.file.sha256}>{r.file.sha256.slice(0, 12)}…</span> : "-") },
-            { key: "st", label: "파일 상태", render: (r) => (r.file ? <Dot status={r.file.status} /> : "-") },
-            { key: "created_at", label: "등록일", mono: true, render: (r) => dt(r.created_at) }]} />
+        <Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[17px] font-medium">{t("현재 상태")}</span>
+            {state === "none" ? <span className="text-sm text-mute">{t("신청 전")}</span> : <Dot status={state} />}
+            {plan?.day_no && <span className="num rounded-ctl border border-line px-2 py-0.5 text-[13px]">D+{plan.day_no - 1}</span>}
+            {plan?.is_mock && <MockTag />}
+            <span className="ml-auto flex gap-2">
+              {state === "none" && <Link to={`/dashboard/new-test?app=${id}`}><Button variant="primary">{t("테스트 신청")}</Button></Link>}
+              {state === "pending_payment" && <Link to={`/dashboard/pay/${o.pending_order_id}`}><Button variant="primary">{t("결제하기")}</Button></Link>}
+              {plan && <Link to={`/dashboard/orders/${plan.order_id}`}><Button>{t("상세 결과")}</Button></Link>}
+            </span>
+          </div>
+          <p className="mt-3 text-sm text-sub">{t(stateText[state] || "")}</p>
+          {plan && ["scheduled", "running"].includes(plan.status) && <div className="mt-4"><Notice>{t("배정된 검사 기기에서 하루")} {plan.daily_runs}{t("회 앱을 실행해 검사하고, 실행 직후 화면을 캡처해 올립니다. 다음 검사")}: <span className="num">{dt(plan.next_run_at)}</span></Notice></div>}
+          {state === "waiting_devices" && <div className="mt-4"><Notice tone="warn">{t("가용 검사 기기가 부족하여 배정 대기 중입니다. 기기가 확보되면 자동으로 시작되며 검사 기간은 시작 시점부터 계산됩니다")}</Notice></div>}
         </Card>
-        <Card title={t("새 버전 등록")}><VersionUpload app={x} onDone={app.reload} /></Card>
-        <Card title={t("Google Play 비공개 테스트 관리")}>
-          <Notice>{ct.data?.notice}</Notice>
-          <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat label="실제 테스터(참여 확인)" value={`${ct.data?.human_testers_confirmed ?? 0} / ${ct.data?.human_testers_invited ?? 0}`} note={t("직접 관리하는 사람 테스터")} />
-            <Stat label="실기기 자동 검사 기기" value={num(ct.data?.real_devices_tested)} note={t("테스터 참여와 별개")} />
-            <Stat label="기기 Google 계정 확인" value={num(ct.data?.device_google_accounts_confirmed)} note={t("운영자 확인 항목")} />
-            <Stat label="테스트 경과일" value={ct.data?.days_since_start ?? "-"} note={x.closed_test_started_on || t("시작일 미입력")} />
+
+        {plan && <>
+          <div className="grid grid-cols-3 gap-4">
+            <Stat label="테스트 진행" value={plan.day_no ? `${plan.day_no}${t("일차")}` : "-"} note={`${dt(plan.end_at, false)} ${t("종료 예정")}`} />
+            <Stat label="참여 기기" value={`${o.report.devices}${t("대")}`} note={`${t("배정")} ${plan.assigned_devices} · ${t("연결")} ${plan.connected_devices}`} />
+            <Stat label="총 실행 횟수" value={`${o.report.runs}${t("회")}`} note={plan.success_rate == null ? "" : `${t("성공률")} ${plan.success_rate}%`} />
           </div>
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <div>
-              <Field label="실제 테스터 이메일 추가" hint="줄바꿈 또는 쉼표로 구분"><Textarea value={emails} onChange={(e) => setEmails(e.target.value)} /></Field>
-              <div className="mt-3 flex gap-2"><Button onClick={() => a.run(() => post(`/apps/${id}/testers`, { emails: emails.split(/[\s,;]+/).filter(Boolean) })).then(() => { setEmails(""); ct.reload(); })}>{t("추가")}</Button>
-                <Button onClick={() => download(`/apps/${id}/testers.csv`, `testers-${id}.csv`)}>{t("CSV 내보내기")}</Button>
-                <Button onClick={() => get(`/apps/${id}/production-notes`).then((r) => setNotes(r.text))}>{t("프로덕션 신청 참고자료")}</Button></div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="비공개 테스트 시작일"><Input type="date" defaultValue={x.closed_test_started_on} onBlur={(e) => e.target.value !== x.closed_test_started_on && put(`/apps/${id}`, { ...x, closed_test_started_on: e.target.value }).then(reloadAll)} /></Field>
-              <div className="sm:col-span-2"><Field label="테스트 결과를 반영한 개선사항"><Textarea defaultValue={x.improvements} onBlur={(e) => e.target.value !== x.improvements && put(`/apps/${id}`, { ...x, improvements: e.target.value }).then(reloadAll)} /></Field></div>
+          <Card title={<>{t("예약 작업 목록")} <span className="num ml-2 text-mute">{o.queue.length}</span></>} action={<Button size="sm" onClick={ov.reload}>{t("새로고침")}</Button>}>
+            {!o.queue.length ? <p className="text-sm text-mute">{t("대기 중인 작업이 없습니다")}{plan.next_run_at && <> · {t("다음 검사")} <span className="num">{dt(plan.next_run_at)}</span></>}</p> :
+              <div className="flex gap-3 overflow-x-auto pb-1">{o.queue.map((q: any, i: number) => <div key={q.id} className="w-44 shrink-0 rounded-ctl border border-line p-3"><div className="flex justify-between text-xs text-mute"><span>#{i + 1}</span><Dot status={q.status} /></div><div className="mt-2 truncate text-sm">{q.device}</div><div className="num truncate text-[11px] text-mute">{q.serial}</div><div className="num mt-1 text-xs text-sub">{q.status === "queued" ? dt(q.at) : `${q.progress}%`}</div></div>)}</div>}
+          </Card>
+          <Card title={t("일별 실행 기록")}>
+            <p className="mb-4 text-[13px] text-mute">{t("칸 하나가 기기 한 대입니다. 붉은 테두리는 크래시·ANR, 점선은 실행을 확인하지 못한 기기입니다. 칸을 누르면 화면을 크게 봅니다")}</p>
+            {!o.days.length && <p className="py-6 text-center text-sm text-mute">{t("아직 기록된 검사 결과가 없습니다")}</p>}
+            <div className="space-y-6">{o.days.map((d: any) => (
+              <section key={d.day}>
+                <div className="mb-3 flex flex-wrap items-baseline gap-3"><h3 className="num text-[15px] font-medium">{d.day}</h3><span className={cx("text-sm", d.confirmed >= d.total ? "text-ok" : "text-warn")}>{t("실행 확인")} <span className="num">{d.confirmed}/{d.total}</span>{t("대")}</span><span className="num ml-auto text-xs text-mute">{kst(d.first)} ~ {kst(d.last)} KST</span></div>
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10">{d.cells.map((c: any) => (
+                  <button key={c.serial} onClick={() => c.screenshot_url && setZoom(c)} className="text-left">
+                    {c.screenshot_url ? <img src={c.screenshot_url} alt="" loading="lazy" className={cx("aspect-[9/16] w-full rounded-ctl border bg-raised object-cover", c.crash ? "border-2 border-bad" : "border-line")} /> :
+                      <span className={cx("flex aspect-[9/16] w-full items-center justify-center rounded-ctl border border-dashed text-[11px] text-mute", c.crash ? "border-bad" : "border-line")}>{t(c.launched ? "화면 없음" : "미실행")}</span>}
+                    <span className="num mt-1 block text-xs">{kst(c.at)}</span><span className="num block truncate text-[10px] text-mute">{c.serial}</span>
+                  </button>))}</div>
+              </section>))}</div>
+          </Card>
+        </>}
+
+        <Card title={t("앱 정보")} action={<div className="flex gap-2">
+          <input ref={iconRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => { const f = e.target.files?.[0]; if (!f) return; const fd = new FormData(); fd.append("file", f); a.run(() => upload(`/apps/${id}/icon`, fd, () => {})).then(app.reload); }} />
+          <Button size="sm" onClick={() => iconRef.current?.click()}>{t("아이콘 변경")}</Button><Button size="sm" onClick={() => setEdit(true)}>{t("정보 수정")}</Button>
+          <Button size="sm" variant="danger" onClick={() => confirm(t("이 앱을 삭제할까요?")) && a.run(() => del(`/apps/${id}`)).then((r) => r && nav("/dashboard/apps"))}>{t("삭제")}</Button></div>}>
+          <dl className="grid gap-x-8 gap-y-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt className="text-xs text-mute">{t("등록일")}</dt><dd className="num mt-1">{dt(x.created_at)}</dd></div>
+            <div><dt className="text-xs text-mute">{t("Play 스토어 링크")}</dt><dd className="mt-1">{x.play_url ? <a className="underline" href={x.play_url} target="_blank" rel="noreferrer">{t("스토어에서 보기")}</a> : "-"}</dd></div>
+            <div><dt className="text-xs text-mute">{t("검사 서비스 만료일")}</dt><dd className="num mt-1">{plan ? dt(plan.end_at, false) : "-"}</dd></div>
+            <div><dt className="text-xs text-mute">{t("배정 기기")}</dt><dd className="num mt-1">{plan ? `${plan.assigned_devices}${t("대")}` : "-"}</dd></div>
+          </dl>
+          <div className="mt-5 flex flex-wrap items-end gap-4 rounded-ctl border border-line bg-raised p-4">
+            <Field label="비공개 테스트 시작일"><Input type="date" className="!w-44" defaultValue={x.closed_test_started_on} onBlur={(e) => e.target.value !== x.closed_test_started_on && saveApp({ closed_test_started_on: e.target.value })} /></Field>
+            <div className="text-sm"><div className="text-xs text-mute">{t("시작일 + 14일")}</div><div className="num mt-1">{o?.production_eligible_on || "-"}</div></div>
+            <p className="basis-full text-xs leading-5 text-mute">{t("날짜 계산만 제공합니다. 프로덕션 신청 가능 여부는 Play Console에 표시되는 조건이 기준이며, 본 서비스는 승인을 보장하지 않습니다")}</p>
+          </div>
+        </Card>
+
+        <TesterAccounts />
+
+        <details className="rounded-card border border-line bg-card">
+          <summary className="cursor-pointer px-5 py-4 text-[15px] font-medium">{t("버전·APK 파일")} <span className="num ml-2 text-mute">{x.versions.length}</span></summary>
+          <div className="border-t border-line"><Table rows={x.versions} empty="등록된 버전이 없습니다" cols={[
+            { key: "version_name", label: "버전", mono: true }, { key: "version_code", label: "버전 코드", mono: true },
+            { key: "file", label: "APK", render: (r) => (r.file ? <span className="num text-sub">{r.file.filename} · {size(r.file.size)}</span> : <span className="text-mute">{t(r.version_code === 0 ? "Play 스토어에서 설치" : "미등록")}</span>) },
+            { key: "st", label: "파일 상태", render: (r) => (r.file ? <Dot status={r.file.status} /> : "-") },
+            { key: "created_at", label: "등록일", mono: true, render: (r) => dt(r.created_at) }]} /></div>
+          <div className="border-t border-line p-5"><VersionUpload app={x} onDone={app.reload} /></div>
+        </details>
+
+        <details className="rounded-card border border-line bg-card">
+          <summary className="cursor-pointer px-5 py-4 text-[15px] font-medium">{t("사람 테스터 관리·프로덕션 신청 참고자료")}</summary>
+          <div className="border-t border-line p-5">
+            <Notice>{ct.data?.notice}</Notice>
+            <div className="mt-4 grid gap-6 lg:grid-cols-2">
+              <div>
+                <Field label="실제 테스터 이메일 추가" hint="줄바꿈 또는 쉼표로 구분"><Textarea value={emails} onChange={(e) => setEmails(e.target.value)} /></Field>
+                <div className="mt-3 flex flex-wrap gap-2"><Button onClick={() => a.run(() => post(`/apps/${id}/testers`, { emails: emails.split(/[\s,;]+/).filter(Boolean) })).then(() => { setEmails(""); ct.reload(); })}>{t("추가")}</Button>
+                  <Button onClick={() => download(`/apps/${id}/testers.csv`, `testers-${id}.csv`)}>{t("CSV 내보내기")}</Button>
+                  <Button onClick={() => get(`/apps/${id}/production-notes`).then((r) => setNotes(r.text))}>{t("프로덕션 신청 참고자료")}</Button></div>
+              </div>
+              <Field label="테스트 결과를 반영한 개선사항"><Textarea defaultValue={x.improvements} onBlur={(e) => e.target.value !== x.improvements && saveApp({ improvements: e.target.value })} /></Field>
             </div>
           </div>
-          <div className="-mx-5 mt-6 border-t border-line">
+          <div className="border-t border-line">
             <Table rows={ct.data?.testers} empty="등록된 실제 테스터가 없습니다" cols={[
               { key: "email", label: "이메일" },
-              { key: "status", label: "상태", render: (r) => <Select className="!h-8 w-32" value={r.status} onChange={(e) => patch(`/apps/${id}/testers/${r.id}`, { status: e.target.value }).then(ct.reload)}>{["invited", "joined", "confirmed"].map((s) => <option key={s} value={s}>{t(STATUS[s])}</option>)}</Select> },
+              { key: "status", label: "상태", render: (r) => <Select className="!h-8 w-32" value={r.status} onChange={(e) => patch(`/apps/${id}/testers/${r.id}`, { status: e.target.value }).then(ct.reload)}>{["invited", "joined", "confirmed"].map((st) => <option key={st} value={st}>{t(STATUS[st])}</option>)}</Select> },
               { key: "feedback", label: "피드백", render: (r) => <Input className="!h-8" defaultValue={r.feedback} placeholder={t("테스터 피드백 기록")} onBlur={(e) => e.target.value !== r.feedback && patch(`/apps/${id}/testers/${r.id}`, { feedback: e.target.value }).then(ct.reload)} /> },
               { key: "x", label: "", right: true, render: (r) => <Button size="sm" variant="ghost" onClick={() => del(`/apps/${id}/testers/${r.id}`).then(ct.reload)}>{t("삭제")}</Button> }]} />
           </div>
-        </Card>
+        </details>
       </div>
       {edit && <AppForm initial={x} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); reloadAll(); }} />}
       {notes && <Modal title="프로덕션 신청 참고자료" onClose={() => setNotes("")} wide><pre className="whitespace-pre-wrap rounded-ctl bg-raised p-4 font-sans text-[13px] leading-6">{notes}</pre><div className="mt-4 text-right"><Button onClick={() => navigator.clipboard.writeText(notes)}>{t("복사")}</Button></div></Modal>}
+      {zoom && <Modal title={`${zoom.device} · ${kst(zoom.at)}`} onClose={() => setZoom(null)}><img src={zoom.screenshot_url} alt="" className="mx-auto max-h-[70vh] rounded-ctl border border-line" /><p className="num mt-3 text-center text-xs text-mute">{zoom.serial}</p></Modal>}
     </>
   );
 }
@@ -251,9 +374,9 @@ export function NewTest() {
           <Card title={t("1. 앱과 버전")}>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="앱"><Select value={f.app_id} onChange={(e) => set("app_id", e.target.value)} required><option value="">{t("선택")}</option>{(apps.data || []).map((x) => <option key={x.id} value={x.id}>{x.name} ({x.package_name})</option>)}</Select></Field>
-              <Field label="검사할 버전"><Select value={f.app_version_id} onChange={(e) => set("app_version_id", e.target.value)} required><option value="">{t("선택")}</option>{(app?.versions || []).map((v: any) => <option key={v.id} value={v.id} disabled={v.file?.status === "quarantined"}>{v.version_name} ({v.version_code}){v.file ? "" : ` · ${t("APK 없음")}`}</option>)}</Select></Field>
+              <Field label="검사할 버전"><Select value={f.app_version_id} onChange={(e) => set("app_version_id", e.target.value)} required><option value="">{t("선택")}</option>{(app?.versions || []).map((v: any) => <option key={v.id} value={v.id} disabled={v.file?.status === "quarantined"}>{v.version_code === 0 ? t("Play 스토어 배포본 (기기가 스토어에서 설치)") : `${v.version_name} (${v.version_code})${v.file ? "" : ` · ${t("APK 없음")}`}`}</option>)}</Select></Field>
             </div>
-            {app && !app.versions.length && <div className="mt-3"><Notice tone="warn">{t("이 앱에 등록된 버전이 없습니다")} <Link className="underline" to={`/dashboard/apps/${app.id}`}>{t("버전 등록")}</Link></Notice></div>}
+            {app && String(app.versions.find((v: any) => String(v.id) === f.app_version_id)?.version_code) === "0" && <div className="mt-3"><Notice>{t("Play 스토어 배포본은 검사 기기 계정을 테스터로 추가해야 설치됩니다")} <Link className="underline" to={`/dashboard/apps/${app.id}`}>{t("계정 목록 보기")}</Link></Notice></div>}
           </Card>
           <Card title={t("2. 상품")} pad={false}>
             {(products.data || []).filter((p) => !p.is_quote).map((p) => (

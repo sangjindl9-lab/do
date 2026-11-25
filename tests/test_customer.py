@@ -131,7 +131,7 @@ def test_apk_upload_hash_duplicate_and_quarantine(client, customer, db):
     assert up("v6-again.apk", same, 7).status_code == 409                    # 동일 해시 중복
     assert up("v6.apk", make_apk(pkg, 6), 6).status_code == 409              # 버전 코드 중복
     versions = client.get(f"/api/apps/{app['id']}", headers=customer.h).json()["versions"]
-    assert [v["version_code"] for v in versions] == [6, 1]                   # 버전 이력
+    assert [v["version_code"] for v in versions] == [6, 1, 0]                # 버전 이력(0 = Play 스토어 배포본)
 
 
 def test_products_orders_and_coupon(client, customer, admin):
@@ -174,3 +174,79 @@ def test_withdraw_anonymizes_account(client):
     assert client.post("/api/me/withdraw", headers=c.h, json={"password": c.password}).status_code == 200
     assert client.get("/api/me", headers=c.h).status_code == 401
     assert client.post("/api/auth/login", json={"identifier": c.email, "password": c.password}).status_code == 401
+
+
+def test_playstore_listing_parser_and_fetch():
+    """스토어 페이지 해석: 제목 접미사 제거, 허용 호스트의 아이콘만 채택, 없는 앱은 found=False."""
+    import httpx
+    from app.services import playstore
+    page = ('<html><head><meta property="og:title" content="내 앱 &amp; 친구 - Google Play 앱">'
+            '<meta property="og:image" content="https://play-lh.googleusercontent.com/abc123">'
+            '<meta property="og:description" content="설명입니다"></head></html>')
+
+    def handler(request):
+        if request.url.host == "play.google.com":
+            assert request.url.params["id"] in ("com.real.app", "com.none.app")
+            return httpx.Response(200, text=page) if request.url.params["id"] == "com.real.app" else httpx.Response(404)
+        return httpx.Response(200, content=b"\x89PNG....")
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    info = playstore.fetch_listing("com.real.app", client=client)
+    assert info == {"found": True, "name": "내 앱 & 친구", "icon": "https://play-lh.googleusercontent.com/abc123",
+                    "description": "설명입니다", "play_url": "https://play.google.com/store/apps/details?id=com.real.app"}
+    assert playstore.fetch_listing("com.none.app", client=client) == {"found": False}
+    evil = page.replace("https://play-lh.googleusercontent.com/abc123", "http://169.254.169.254/latest")
+    assert playstore.parse_listing(evil, "com.real.app")["icon"] == ""          # 허용 호스트 외 주소는 버린다
+    assert playstore.fetch_icon("http://169.254.169.254/latest", client=client) is None
+
+
+def test_register_app_with_package_name_only(client, customer, monkeypatch):
+    """패키지명만으로 등록: 스토어에서 이름·주소·아이콘을 불러온다. 조회되지 않으면 이름 입력을 요구한다."""
+    from app.services import playstore
+    png = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+    found = {"found": True, "name": "스토어 앱 이름", "icon": "https://play-lh.googleusercontent.com/x", "description": "스토어 설명",
+             "play_url": "https://play.google.com/store/apps/details?id=PKG"}
+    monkeypatch.setattr(playstore, "fetch_listing", lambda pkg, *a, **k: {**found, "play_url": found["play_url"].replace("PKG", pkg)} if "pub" in pkg else {"found": False})
+    monkeypatch.setattr(playstore, "fetch_icon", lambda url, *a, **k: png)
+    pkg = f"com.pub.a{uuid.uuid4().hex[:8]}"
+    look = client.post("/api/apps/lookup", headers=customer.h, json={"package_name": pkg}).json()
+    assert look["found"] and look["name"] == "스토어 앱 이름" and look["registered"] is False
+    assert client.post("/api/apps/lookup", headers=customer.h, json={"package_name": "bad name"}).status_code == 400
+    app = client.post("/api/apps", headers=customer.h, json={"package_name": pkg, "ownership_confirmed": True}).json()
+    assert app["name"] == "스토어 앱 이름" and app["play_url"].endswith(pkg) and app["description"] == "스토어 설명"
+    assert client.get(app["icon_url"]).content == png
+    assert client.post("/api/apps/lookup", headers=customer.h, json={"package_name": pkg}).json()["registered"] is True
+    hidden = f"com.closed.a{uuid.uuid4().hex[:8]}"
+    r = client.post("/api/apps", headers=customer.h, json={"package_name": hidden, "ownership_confirmed": True})
+    assert r.status_code == 400 and "앱 이름을 직접 입력" in r.json()["detail"]
+    ok = client.post("/api/apps", headers=customer.h, json={"package_name": hidden, "name": "직접 입력", "ownership_confirmed": True})
+    assert ok.status_code == 200 and ok.json()["name"] == "직접 입력"
+
+
+def test_play_link_registration_and_tester_accounts(client, customer, admin, monkeypatch, db):
+    """Play Store 링크로 등록 → 기본 'Play 스토어 배포본' 버전 생성. 검사 기기 계정 목록은 실기기만 제공한다."""
+    from app.models import Agent, Device
+    from app.services import playstore
+    monkeypatch.setattr(playstore, "fetch_listing", lambda pkg, *a, **k: {"found": True, "name": "링크 앱", "icon": "", "description": "", "play_url": "https://play.google.com/store/apps/details?id=" + pkg})
+    pkg = f"com.link.a{uuid.uuid4().hex[:8]}"
+    link = f"https://play.google.com/store/apps/details?id={pkg}&hl=ko"
+    assert client.post("/api/apps/lookup", headers=customer.h, json={"package_name": link}).json()["package_name"] == pkg
+    app = client.post("/api/apps", headers=customer.h, json={"package_name": link, "ownership_confirmed": True}).json()
+    assert app["package_name"] == pkg and [v["version_name"] for v in app["versions"]] == ["Play 스토어 배포본"]
+    order = customer.order(app, app["versions"][0])                         # APK 없이 바로 신청 가능
+    assert order["status"] == "pending_payment"
+    agent = Agent(uid="AG-" + uuid.uuid4().hex[:8], name="real-farm", kind="real", status="online")
+    db.add(agent)
+    db.flush()
+    real = Device(agent_id=agent.id, serial="R1" + uuid.uuid4().hex[:6], is_mock=False, enabled=False)
+    mock = Device(agent_id=agent.id, serial="M1" + uuid.uuid4().hex[:6], is_mock=True, google_account_email="mock@example.com")
+    db.add_all([real, mock])
+    db.commit()
+    mail = f"farm-{uuid.uuid4().hex[:6]}@gmail.com"
+    assert client.patch(f"/api/admin/devices/{real.id}", headers=admin, json={"google_account_email": "not-an-email"}).status_code == 400
+    r = client.patch(f"/api/admin/devices/{real.id}", headers=admin, json={"google_account_email": mail.upper(), "enabled": True})
+    assert r.json()["google_account_email"] == mail
+    got = client.get("/api/tester-accounts", headers=customer.h).json()
+    assert mail in got["emails"] and "mock@example.com" not in got["emails"] and "사람 테스터가 아닙니다" in got["notice"]
+    assert client.get("/api/tester-accounts").status_code == 401
+    client.patch(f"/api/admin/devices/{real.id}", headers=admin, json={"enabled": False})

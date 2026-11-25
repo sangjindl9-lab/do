@@ -42,6 +42,10 @@ class DeviceProvider(ABC):
     @abstractmethod
     def install(self, serial: str, apk_path: str) -> tuple[bool, str]: ...
 
+    def play_install(self, serial: str, package: str) -> tuple[bool, str]:
+        """Play 스토어에서 설치(비공개 트랙 포함). 지원하지 않는 Provider는 기본값을 쓴다."""
+        return False, "이 장비 연결 방식은 Play 스토어 설치를 지원하지 않습니다"
+
     @abstractmethod
     def uninstall(self, serial: str, package: str) -> tuple[bool, str]: ...
 
