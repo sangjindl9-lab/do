@@ -130,6 +130,51 @@ class AdbProvider(DeviceProvider):
         self.key(serial, "HOME")
         return False, "Play 스토어 설치 시간 초과" if tapped else "Play 스토어에서 설치 버튼을 찾지 못함(테스터 등록·참여 여부 확인 필요)"
 
+    _BTN = r'(?:text|content-desc)="(?:%s)"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"'
+
+    def _tap_button(self, serial, labels: str) -> bool:
+        m = re.search(self._BTN % labels, self.dump_ui(serial))
+        if not m:
+            return False
+        x1, y1, x2, y2 = map(int, m.groups())
+        self.tap(serial, (x1 + x2) // 2, (y1 + y2) // 2)
+        return True
+
+    def play_optin(self, serial, package):
+        """참여 링크(play.google.com/apps/testing/<패키지>)를 브라우저로 열어 '테스터 되기'를 누른다."""
+        import time
+        self._pkg(package)
+        self._sh(serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", f"https://play.google.com/apps/testing/{package}")
+        joined = False
+        for _ in range(8):
+            time.sleep(3)
+            xml = self.dump_ui(serial)
+            if re.search(r"테스터입니다|You are a tester|테스터가 되셨습니다", xml):
+                joined = True
+                break
+            self._tap_button(serial, "테스터 되기|테스터로 참여|Become a tester|BECOME A TESTER")
+        self.key(serial, "HOME")
+        return joined, "테스트 참여 확인" if joined else "테스트 참여 화면을 확인하지 못함(계정이 테스터 목록에 없거나 로그인이 필요함)"
+
+    def play_update(self, serial, package, timeout: int = 240):
+        import time
+        self._pkg(package)
+        before = self.installed_version(serial, package)
+        self._sh(serial, "am", "start", "-a", "android.intent.action.VIEW", "-d", f"market://details?id={package}", "com.android.vending")
+        time.sleep(4)
+        if not self._tap_button(serial, "업데이트|Update"):
+            self.key(serial, "HOME")
+            return False, f"새 버전 없음 (설치 버전 {before})"
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            time.sleep(5)
+            now = self.installed_version(serial, package)
+            if now and now != before:
+                self.key(serial, "HOME")
+                return True, f"{before} → {now} 업데이트"
+        self.key(serial, "HOME")
+        return False, "업데이트 시간 초과"
+
     def uninstall(self, serial, package):
         out = self._run(["-s", serial, "uninstall", self._pkg(package)], 120)
         return "Success" in out, out.strip()[:300]

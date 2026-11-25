@@ -26,9 +26,11 @@ def test_schedule_repeats_and_never_duplicates(client, admin, customer, mock_pg,
     assert scheduler.tick_schedules(db, now) == 5
     assert scheduler.tick_schedules(db, now) == 0
     sched = db.scalar(select(TestSchedule).where(TestSchedule.plan_id == plan.id))
-    assert abs((sched.next_run_at - sched.last_run_at) - timedelta(hours=24)) < timedelta(seconds=1)   # 일 1회
-    assert scheduler.tick_schedules(db, now + timedelta(hours=23)) == 0
-    assert scheduler.tick_schedules(db, now + timedelta(hours=24, minutes=1)) == 5                        # 반복 검사
+    assert sched.run_times == ["17:00"]                                    # 매일 한국시간 오전 2시(UTC 17:00)
+    nxt = sched.next_run_at
+    assert (nxt.hour, nxt.minute) == (17, 0) and timedelta(0) < nxt - now <= timedelta(hours=24)
+    assert scheduler.tick_schedules(db, nxt - timedelta(minutes=1)) == 0
+    assert scheduler.tick_schedules(db, nxt + timedelta(minutes=1)) == 5                                  # 반복 검사
     assert db.scalar(select(func.count()).select_from(TestJob).where(TestJob.plan_id == plan.id)) == 10
     # 특정 시간 검사(관리자 설정)
     r = client.patch(f"/api/admin/plans/{plan.id}", headers=admin, json={"run_times": ["03:00", "15:00"], "daily_runs": 2})
@@ -259,3 +261,38 @@ def test_full_cycle_completion_and_reports(client, admin, customer, mock_pg, far
     assert [r[0].value for r in wb["일별"].iter_rows(min_row=2)] and wb["기기별"].max_row == 6
     listed = client.get("/api/reports", headers=customer.h).json()["items"]
     assert len(listed) == 9
+
+
+def test_play_flow_install_request_period_start_and_update(client, admin, customer, mock_pg, farm, db):
+    """Play 스토어 배포본: 설치 요청 → 기준 대수 설치 시 검사 기간 시작 → 스토어 새 버전 자동 업데이트 표시."""
+    from app.models import TestPlan
+    from app.services import scheduler
+    from gat_engine.providers import MockProvider
+    app = client.post("/api/apps", headers=customer.h, json={"package_name": f"com.playflow.a{__import__('uuid').uuid4().hex[:8]}", "name": "플레이앱", "ownership_confirmed": True}).json()
+    pkg = app["package_name"]
+    order = customer.order(app, app["versions"][0])
+    assert customer.pay(order)[0].status_code == 200
+    plan = db.scalar(select(TestPlan).where(TestPlan.order_id == order["id"]))
+    assert plan.status == "scheduled" and plan.period_started is False
+    MockProvider.store_version[pkg] = "1.0.0"
+    req = client.post(f"/api/plans/{plan.id}/install-request", headers=customer.h)
+    assert req.status_code == 200 and req.json()["jobs_created"] == 5
+    assert client.post(f"/api/plans/{plan.id}/install-request", headers=customer.h).status_code == 409   # 진행 중에는 중복 요청 불가
+    farm.cycle()
+    db.expire_all()
+    plan = db.get(TestPlan, plan.id)
+    assert plan.period_started is True and (plan.end_at - plan.start_at).days == 7
+    ov = client.get(f"/api/apps/{app['id']}/overview", headers=customer.h).json()
+    assert ov["installed_devices"] == 5 and ov["install_threshold"] == 5 and ov["version"]["installed"] == "1.0.0"
+    assert all(c["updated"] is False for c in ov["days"][0]["cells"])
+    MockProvider.store_version[pkg] = "1.1.0"                               # 고객이 스토어에 새 버전 출시
+    assert client.post(f"/api/plans/{plan.id}/install-request", headers=customer.h).json()["jobs_created"] == 5
+    farm.cycle()
+    ov = client.get(f"/api/apps/{app['id']}/overview", headers=customer.h).json()
+    assert ov["version"]["installed"] == "1.1.0" and all(c["updated"] for c in ov["days"][0]["cells"])
+    res = client.get(f"/api/plans/{plan.id}/results", headers=customer.h).json()
+    assert any("1.0.0 → 1.1.0" in s["actual"] for s in res[0]["steps"])
+    from conftest import Cust
+    assert client.post(f"/api/plans/{plan.id}/install-request", headers=Cust(client).h).status_code == 404
+    client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
+    MockProvider.store_version.clear()

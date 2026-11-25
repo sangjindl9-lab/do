@@ -44,6 +44,29 @@ def retry_or_fail(db: Session, job: TestJob, reason: str, final_status: str = "f
     notify(db, owner, "test_error", {"app": plan.app.name, "reason": reason[:200]}, f"/dashboard/orders/{plan.order_id}")
 
 
+def installed_devices(db: Session, plan: TestPlan) -> int:
+    """앱 실행이 확인된(=설치된) 기기 수."""
+    db.flush()
+    rows = db.execute(select(TestResult.device_id, TestResult.steps).where(TestResult.plan_id == plan.id)).all()
+    return len({d for d, steps in rows if any(s.get("key") == "launch" and s.get("status") == "passed" for s in steps or [])})
+
+
+def start_period_if_ready(db: Session, plan: TestPlan) -> None:
+    """12대(상품 기기 수가 더 적으면 그 수) 이상 설치되면 그 시점부터 검사 기간을 계산한다."""
+    if plan.period_started:
+        return
+    # 여러 기기의 결과가 동시에 들어오므로 계획 행을 잠근 뒤 센다(잠금 대기 후에는 먼저 끝난 결과가 보인다).
+    db.flush()
+    db.execute(select(TestPlan.id).where(TestPlan.id == plan.id).with_for_update(key_share=True))  # FOR NO KEY UPDATE: FK 잠금과 충돌하지 않음
+    db.refresh(plan)
+    if plan.period_started:
+        return
+    if installed_devices(db, plan) >= min(12, plan.device_count):
+        now = utcnow()
+        duration = plan.end_at - plan.start_at
+        plan.start_at, plan.end_at, plan.period_started = now, now + duration, True
+
+
 def ingest(db: Session, job: TestJob, body: dict) -> TestResult:
     existing = db.scalar(select(TestResult).where(TestResult.job_id == job.id))
     if existing:
@@ -100,6 +123,7 @@ def ingest(db: Session, job: TestJob, body: dict) -> TestResult:
         if not known and kind in ("crash", "anr"):
             notify(db, owner, "crash_found", {"app": plan.app.name, "kind": "크래시" if kind == "crash" else "ANR",
                                               "title": title[:120]}, f"/dashboard/orders/{plan.order_id}")
+    start_period_if_ready(db, plan)
     job.status, job.finished_at, job.progress = "succeeded", utcnow(), 100
     job.lease_token, job.lease_expires_at, job.error = None, None, ""
     device = db.get(Device, job.device_id)

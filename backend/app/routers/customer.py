@@ -1,3 +1,4 @@
+import os
 """고객용 API. 모든 조회는 customer_id로 격리한다."""
 import csv
 import io
@@ -287,6 +288,24 @@ def tester_accounts_csv(customer: Customer = Depends(current_customer), db: Sess
                     headers={"Content-Disposition": 'attachment; filename="test-device-accounts.csv"'})
 
 
+@router.post("/plans/{plan_id}/install-request")
+def install_request(plan_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """설치 요청: 배정된 검사 기기에 설치·실행 작업을 차례로 보낸다(진행 중인 작업이 있으면 거절)."""
+    from ..hub import hub
+    plan = own_plan(db, customer, plan_id)
+    if plan.status not in ("scheduled", "running"):
+        raise HTTPException(400, "기기가 배정된 뒤에 설치를 요청할 수 있습니다.")
+    if db.scalar(select(TestJob.id).where(TestJob.plan_id == plan.id, TestJob.status.in_(["queued", "leased", "running"])).limit(1)):
+        raise HTTPException(409, "이미 진행 중인 작업이 있습니다. 예약 작업 목록을 확인해 주세요.")
+    n = order_svc.create_jobs_for_run(db, plan, "I" + utcnow().strftime("%Y%m%dT%H%M%S"), "install")
+    if plan.status == "scheduled":
+        plan.status, plan.order.status = "running", "running"
+    db.commit()
+    for aid in db.scalars(select(TestJob.agent_id).where(TestJob.plan_id == plan.id, TestJob.status == "queued").distinct()):
+        hub.wake(aid)
+    return {"ok": True, "jobs_created": n}
+
+
 @router.get("/apps/{app_id}/overview")
 def app_overview(app_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
     """앱 상세: 현재 상태, 일정, 예약 작업, 리포트, 일별 실행 기록(기기별 실행 화면)."""
@@ -318,6 +337,19 @@ def app_overview(app_id: int, customer: Customer = Depends(current_customer), db
     for sh in db.scalars(select(Screenshot).where(Screenshot.plan_id == plan.id, Screenshot.label == "앱 실행 직후").order_by(Screenshot.id)):
         shots[sh.job_id] = sh.id
     days: dict[str, dict] = {}
+    prev_version: dict[int, str] = {}
+    updated_ids = set()
+    for r in reversed(results):  # 오래된 것부터: 기기별로 버전이 바뀐 첫 실행을 표시
+        ver = (r.summary or {}).get("installed_version")
+        if ver and prev_version.get(r.device_id) not in (None, ver):
+            updated_ids.add(r.id)
+        if ver:
+            prev_version[r.device_id] = ver
+    latest = next((r for r in results if (r.summary or {}).get("installed_version")), None)
+    out["version"] = {"installed": (latest.summary or {}).get("installed_version"), "checked_at": latest.finished_at or latest.created_at} if latest else None
+    out["installed_devices"] = len({r.device_id for r in results if any(s.get("key") == "launch" and s.get("status") == "passed" for s in r.steps or [])})
+    out["install_threshold"] = min(12, plan.device_count)
+    out["period_started"] = plan.period_started
     for r in results:
         at = r.finished_at or r.created_at
         key = at.astimezone(KST).strftime("%Y-%m-%d")
@@ -327,7 +359,7 @@ def app_overview(app_id: int, customer: Customer = Depends(current_customer), db
             continue  # 기기당 그날의 가장 최근 실행을 보여준다
         launched = any(s.get("key") == "launch" and s.get("status") == "passed" for s in r.steps or [])
         day["cells"][r.device_id] = {"device": r.device.name or r.device.serial, "serial": r.device.serial, "at": at, "status": r.status,
-                                     "launched": launched, "crash": r.crash_count + r.anr_count > 0, "result_id": r.id,
+                                     "launched": launched, "crash": r.crash_count + r.anr_count > 0, "result_id": r.id, "updated": r.id in updated_ids,
                                      "screenshot_url": file_url("screenshot", shots[r.job_id]) if r.job_id in shots else None}
     out["days"] = [{"day": d["day"], "first": d["first"], "last": d["last"], "confirmed": sum(1 for c in d["cells"].values() if c["launched"]),
                     "total": brief["assigned_devices"] or len(d["cells"]), "cells": sorted(d["cells"].values(), key=lambda c: c["serial"])}
@@ -671,6 +703,8 @@ def download_report(report_id: int, user: User = Depends(current_user), db: Sess
     if not rep or not (user.role.is_staff or (user.customer and rep.customer_id == user.customer.id)):
         raise HTTPException(404, "보고서를 찾을 수 없습니다.")
     media = "application/pdf" if rep.fmt == "pdf" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    if not os.path.isfile(storage.abspath(rep.path)):
+        raise HTTPException(404, "파일을 찾을 수 없습니다.")
     return FileResponse(storage.abspath(rep.path), media_type=media, filename=f"{rep.report_no}.{rep.fmt}")
 
 
@@ -688,6 +722,8 @@ def signed_file(kind: str, obj_id: int, exp: int, sig: str, request: Request, db
     else:
         path = None
     if not path:
+        raise HTTPException(404, "파일을 찾을 수 없습니다.")
+    if not os.path.isfile(storage.abspath(path)):
         raise HTTPException(404, "파일을 찾을 수 없습니다.")
     return FileResponse(storage.abspath(path), media_type=media, headers={"Cache-Control": "private, max-age=600"})
 

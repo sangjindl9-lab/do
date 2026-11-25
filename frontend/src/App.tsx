@@ -28,6 +28,7 @@ export default function App() {
         <Route path="/dashboard" element={<D.Overview />} />
         <Route path="/dashboard/apps" element={<D.Apps />} />
         <Route path="/dashboard/apps/:id" element={<D.AppDetail />} />
+        <Route path="/dashboard/testers" element={<D.Testers />} />
         <Route path="/dashboard/new-test" element={<D.NewTest />} />
         <Route path="/dashboard/pay/:id" element={<D.Pay />} />
         <Route path="/pay/success" element={<D.PaySuccess />} />

@@ -230,10 +230,12 @@ def run_job(provider: DeviceProvider, serial: str, payload: dict, apk_path: str 
             else:
                 current = provider.installed_version(serial, package)
                 if current:
-                    steps.add("install", "passed", "기기에 설치되어 있음", f"Play 스토어 설치본 {current}", started=t0, name="Play 스토어 설치")
+                    updated, msg = provider.play_update(serial, package)
+                    steps.add("install", "passed", "스토어 최신 버전 확인", msg, started=t0, name="Play 스토어 업데이트 확인")
                 else:
+                    joined, join_msg = provider.play_optin(serial, package)
                     ok, msg = provider.play_install(serial, package)
-                    steps.add("install", "passed" if ok else "failed", "Play 스토어에서 설치 성공", msg, started=t0, name="Play 스토어 설치")
+                    steps.add("install", "passed" if ok else "failed", "Play 스토어에서 설치 성공", msg if ok else f"{msg} · {join_msg}", started=t0, name="Play 스토어 설치")
                     if ok:
                         metrics.append({"metric": "install_ms", "value": int((time.monotonic() - t0) * 1000), "unit": "ms"})
                 installed_ok = provider.installed_version(serial, package) is not None
@@ -247,7 +249,7 @@ def run_job(provider: DeviceProvider, serial: str, payload: dict, apk_path: str 
             return _finish(steps, metrics, [], info, started_at, t_start, {"installed_version": version})
         progress(15)
         expected_version = payload.get("version_name")
-        version_note = {"installed_version": version, "expected_version": expected_version,
+        version_note = {"installed_version": version, "expected_version": expected_version if apk_path else None,
                         "version_match": (version == expected_version) if apk_path else None}
         # 2) 실행 + 초기 로딩
         provider.stop(serial, package)

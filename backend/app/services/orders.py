@@ -158,7 +158,9 @@ def on_payment_confirmed(db: Session, order: Order, payment: Payment) -> TestPla
                     priority=10 if snap.get("priority") else 0, is_mock=order.is_mock)
     db.add(plan)
     db.flush()
-    db.add(TestSchedule(plan_id=plan.id, run_times=[], next_run_at=start, status="active"))
+    # 배정 직후 1회(설치) 실행하고, 이후에는 매일 한국시간 오전 2시(UTC 17:00)부터 일일 횟수만큼 실행한다.
+    times = {1: ["17:00"], 2: ["17:00", "05:00"], 3: ["17:00", "01:00", "09:00"]}.get(plan.daily_runs, [])
+    db.add(TestSchedule(plan_id=plan.id, run_times=times, next_run_at=start, status="active"))
     db.flush()
     owner = _owner(db, order)
     notify(db, owner, "payment_done", {"order_no": order.order_no, "amount": f"{payment.amount:,}"},

@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
 os.environ.setdefault("TEST_DATABASE_URL", "postgresql://unused")
 PUBLIC = ["/", "/service", "/how-it-works", "/pricing", "/devices", "/faq", "/notices", "/legal/terms", "/legal/privacy", "/legal/refund", "/login", "/register", "/forgot", "/admin/login"]
-DASH = ["", "/apps", "/new-test", "/orders", "/results", "/reports", "/scenarios", "/payments", "/support", "/notifications", "/account"]
+DASH = ["", "/apps", "/testers", "/new-test", "/orders", "/results", "/reports", "/scenarios", "/payments", "/support", "/notifications", "/account"]
 ADMIN = ["", "/customers", "/users", "/apps", "/orders", "/products", "/coupons", "/payments", "/revenue", "/refunds", "/pg", "/devices", "/device-groups", "/agents", "/incidents",
          "/live", "/jobs", "/plans", "/scenarios", "/results", "/crashes", "/screenshots", "/reports", "/tickets", "/announcements", "/faqs", "/legal", "/settings", "/status",
          "/emails", "/templates", "/audit", "/logs", "/backups", "/account"]
@@ -90,6 +90,8 @@ def main():
             # 2) 앱 등록
             page.goto(base + "/dashboard/apps")
             page.click("button:has-text('앱 등록')")
+            for box in page.locator("[role=dialog] fieldset input[type=checkbox]").all():
+                box.check()
             page.locator("label:has-text('Play Store 링크 또는 패키지명') input").fill(f"https://play.google.com/store/apps/details?id={package}")
             page.click("[role=dialog] button:has-text('불러오기')")
             # 스토어에 없는 앱(비공개 단계)은 이름을 직접 입력한다

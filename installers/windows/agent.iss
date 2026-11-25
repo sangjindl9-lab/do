@@ -1,6 +1,6 @@
 ; Google Auto Tester Agent - Windows 설치 마법사 (Inno Setup 6)
 #define AppName "Google Auto Tester Agent"
-#define AppVersion "1.0.0"
+#define AppVersion "1.0.1"
 
 [Setup]
 AppId={{6B6F1E0E-3C0B-4E5E-9C59-0A5E7C1D2A11}

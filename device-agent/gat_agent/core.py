@@ -68,7 +68,7 @@ class Spool:
 
 
 class Agent:
-    def __init__(self, cfg: Config, client: ServerClient | None = None, provider=None, sleep=time.sleep, settle: float = 3.0):
+    def __init__(self, cfg: Config, client: ServerClient | None = None, provider=None, sleep=time.sleep, settle: float = 2.0):
         self.cfg = cfg
         self.api = client or ServerClient(cfg.server_url, cfg.token)
         self.provider = provider or make_provider(cfg)

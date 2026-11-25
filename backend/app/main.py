@@ -16,7 +16,7 @@ from .services import scheduler, storage
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 log = logging.getLogger("gat")
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 @asynccontextmanager

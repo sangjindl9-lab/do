@@ -37,7 +37,7 @@ DEFAULTS: dict[str, tuple[str, bool, str]] = {
     "limits.storage_low_mb": ("1024", False, "저장공간 부족 기준(MB)"),
     "retention.days": ("180", False, "검사 데이터 보존기간(일)"),
     "retention.cleanup_app_after_test": ("1", False, "검사 종료 후 기기에서 대상 앱 삭제"),
-    "agent.latest_version": ("1.0.0", False, "에이전트 최신 버전"),
+    "agent.latest_version": ("1.0.1", False, "에이전트 최신 버전"),
     "agent.token_days": ("90", False, "에이전트 인증키 유효기간(일)"),
 }
 

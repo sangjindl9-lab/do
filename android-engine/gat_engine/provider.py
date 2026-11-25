@@ -46,6 +46,14 @@ class DeviceProvider(ABC):
         """Play 스토어에서 설치(비공개 트랙 포함). 지원하지 않는 Provider는 기본값을 쓴다."""
         return False, "이 장비 연결 방식은 Play 스토어 설치를 지원하지 않습니다"
 
+    def play_optin(self, serial: str, package: str) -> tuple[bool, str]:
+        """비공개 테스트 참여 페이지를 열어 참여 처리. 지원하지 않으면 건너뛴다."""
+        return False, "지원하지 않음"
+
+    def play_update(self, serial: str, package: str) -> tuple[bool, str]:
+        """Play 스토어에 새 버전이 있으면 업데이트. (업데이트 여부, 설명)"""
+        return False, "지원하지 않음"
+
     @abstractmethod
     def uninstall(self, serial: str, package: str) -> tuple[bool, str]: ...
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "google-auto-tester-agent"
-version = "1.0.0"
+version = "1.0.1"
 description = "Google Auto Tester Agent - 폰팜 제어용 PC 에이전트"
 requires-python = ">=3.10"
 dependencies = ["httpx>=0.27", "websockets>=13"]

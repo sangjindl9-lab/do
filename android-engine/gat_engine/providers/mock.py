@@ -70,11 +70,25 @@ class MockProvider(DeviceProvider):
     def prepare(self, package: str, version: str) -> None:
         self._pending_pkg, self._pending_version = package, version
 
+    store_version: dict[str, str] = {}   # 모의 스토어의 최신 버전(테스트에서 바꿔 업데이트 상황을 만든다)
+
+    def play_optin(self, serial, package):
+        self._dev(serial)
+        return True, "테스트 참여 확인 (MOCK)"
+
+    def play_update(self, serial, package):
+        dev = self._dev(serial)
+        latest, cur = self.store_version.get(package), dev["installed"].get(package)
+        if latest and cur and latest != cur:
+            dev["installed"][package] = latest
+            return True, f"{cur} → {latest} 업데이트 (MOCK)"
+        return False, f"새 버전 없음 (설치 버전 {cur})"
+
     def play_install(self, serial, package):
         dev = self._dev(serial)
         if self.faults.get(serial) == "install_fail":
             return False, "Play 스토어에서 앱을 찾을 수 없음 (MOCK)"
-        dev["installed"][package] = self._pending_version or "play"
+        dev["installed"][package] = self.store_version.get(package) or self._pending_version or "play"
         return True, "Play 스토어에서 설치됨 (MOCK)"
 
     def uninstall(self, serial, package):
