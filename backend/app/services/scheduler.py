@@ -138,6 +138,7 @@ def tick_devices(db: Session, now: datetime | None = None) -> dict:
             continue
         assign.status, assign.released_at = "replaced", now
         db.add(DeviceAssignment(plan_id=plan.id, device_id=sub.id))
+        db.flush()  # 같은 계획의 기기가 한 번에 여러 대 끊겼을 때 같은 대체 기기를 두 번 고르지 않도록 즉시 반영
         for job in db.scalars(select(TestJob).where(TestJob.plan_id == plan.id, TestJob.device_id == assign.device_id,
                                                     TestJob.status == "queued")):
             clash = db.scalar(select(TestJob.id).where(TestJob.plan_id == plan.id, TestJob.device_id == sub.id,

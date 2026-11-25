@@ -350,3 +350,27 @@ def test_single_plan_price_refund_and_free_extension(client, admin, customer, mo
     assert client.post(f"/api/orders/{order['id']}/refund-request", headers=other.h).status_code == 404
     client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
     MockProvider.store_version.clear()
+
+
+def test_two_offline_devices_get_different_replacements(client, admin, customer, mock_pg, db):
+    """같은 계획의 기기 2대가 동시에 끊겨도 서로 다른 대체 기기가 배정된다(중복 배정 오류 회귀 방지)."""
+    from app.db import utcnow
+    from app.models import Device, DeviceAssignment
+    from app.services import scheduler
+    retire_all(db)
+    farm = Farm(client, admin, count=7)
+    farm.cycle()
+    plan = paid_plan(client, customer, db)
+    assigned = db.scalars(select(DeviceAssignment).where(DeviceAssignment.plan_id == plan.id)).all()
+    victims = [assigned[0].device, assigned[1].device]
+    for v in victims:
+        farm.provider.faults[v.serial] = "offline"
+    farm.agent.heartbeat()
+    db.execute(Device.__table__.update().where(Device.id.in_([v.id for v in victims])).values(last_seen_at=utcnow() - timedelta(minutes=40)))
+    db.commit()
+    assert scheduler.tick_devices(db, utcnow())["replaced"] == 2
+    db.expire_all()
+    active = {a.device_id for a in db.scalars(select(DeviceAssignment).where(DeviceAssignment.plan_id == plan.id, DeviceAssignment.status == "active"))}
+    assert len(active) == 5 and not active & {v.id for v in victims}
+    client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
+    farm.retire(db)
