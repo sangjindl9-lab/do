@@ -40,6 +40,17 @@ def app():
     return fastapi_app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def _all_products_on_sale(client):
+    """기존 테스트는 여러 상품(BASIC·PRO 등)을 쓰므로, 단일 요금제 전환으로 꺼진 상품을 테스트에서만 다시 켠다."""
+    from app.db import SessionLocal
+    from app.models import Product
+    with SessionLocal() as s:
+        for p in s.query(Product):
+            p.is_active = True
+        s.commit()
+
+
 @pytest.fixture(scope="session")
 def client(app):
     with TestClient(app) as c:

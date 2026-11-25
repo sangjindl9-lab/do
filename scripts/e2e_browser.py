@@ -112,8 +112,7 @@ def main():
             page.locator("label:has-text('앱') select").first.select_option(index=1)
             page.wait_for_timeout(500)
             page.locator("label:has-text('검사할 버전') select").select_option(label="1.0 (1)")
-            page.locator("label:has-text('PRO')").first.click()
-            page.wait_for_selector("text=14,900원")
+            page.wait_for_selector("text=8,000원")   # 단일 요금제는 자동 선택된다
             shot("new-test")
             page.click("button:has-text('주문하고 결제하기')")
             page.wait_for_url("**/dashboard/pay/*")
@@ -127,11 +126,11 @@ def main():
             while time.time() < deadline:
                 orders = api.get("/orders", headers=ch).json()
                 runs = (orders[0].get("plan") or {}).get("total_runs", 0)
-                if runs >= 20:
+                if runs >= 16:
                     break
                 time.sleep(5)
-            if runs < 20:
-                problems.append(f"검사 결과 {runs}/20건만 수신됨")
+            if runs < 16:
+                problems.append(f"검사 결과 {runs}/16건만 수신됨")
             plan_id = orders[0]["plan"]["id"]
             api.post(f"/plans/{plan_id}/reports", headers=ch, json={"kind": "comprehensive", "fmt": "pdf"}).raise_for_status()
             ws = [a for a in api.get("/admin/agents", headers=admin_headers()).json() if a["id"] == agent["id"]][0]
@@ -140,8 +139,8 @@ def main():
             page.goto(app_url)
             page.wait_for_selector("text=일별 실행 기록")
             page.wait_for_selector("section img")
-            if page.locator("section img").count() < 20:
-                problems.append("앱 상세의 일별 실행 화면이 20칸 미만")
+            if page.locator("section img").count() < 16:
+                problems.append("앱 상세의 일별 실행 화면이 16칸 미만")
             page.wait_for_load_state("networkidle")
             if args.shots:
                 page.screenshot(path=os.path.join(args.shots, "app-detail.png"), full_page=True)

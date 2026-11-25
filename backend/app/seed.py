@@ -47,10 +47,17 @@ LEGAL = {
                 "4. 고객이 등록한 테스트용 로그인 정보는 암호화하여 저장하며 검사 목적 외에 사용하지 않습니다.\n"
                 "5. 서비스는 검사 기기의 Google 계정 비밀번호를 수집하거나 저장하지 않습니다.\n\n"
                 "※ 운영 개시 전 개인정보 보호책임자 정보를 관리자 페이지에서 확정해 주세요."),
-    "refund": ("환불 정책", "1. 검사 시작 전: 전액 환불.\n2. 검사 시작 후: 남은 검사 기간에 비례하여 부분 환불.\n"
-               "3. 서비스 측 장애로 검사를 수행하지 못한 기간은 연장 또는 환불합니다.\n4. 환불은 결제 수단으로 취소 처리됩니다.\n\n"
-               "※ 세부 기준은 운영 정책에 맞게 관리자 페이지에서 수정해 주세요."),
+    "refund": ("가격 및 환불 정책", "1. 요금: 앱 1개당 8,000원(부가세 포함). 검사 기기 16대, 비공개 테스트 필수 기간 14일과 여유 기간 4일을 합친 18일 동안 진행합니다.\n"
+               "2. 무료 연장: 테스트 시작 후 14일 안에 앱을 2회 이상 업데이트한 이력이 확인되면 추가 결제 없이 18일을 1회 연장합니다. 조건에 해당하지 않으면 다시 결제하여 진행할 수 있습니다.\n"
+               "3. 전액 환불: 기준 대수(12대) 이상의 검사 기기에 앱이 설치되지 않아 테스트가 시작되지 않은 경우, 서비스 장애로 피해가 발생한 경우.\n"
+               "4. 환불 불가: 12대 이상의 기기에 앱이 설치되어 테스트가 시작된 경우, TWA(Trusted Web Activity) 앱으로 확인된 경우.\n"
+               "5. 절차: 테스트 시작 전에는 앱 화면의 환불 신청으로 즉시 결제가 취소됩니다. 서비스 장애에 따른 환불은 고객 문의로 사유를 보내 주시면 영업일 3~5일 안에 심사하고, 승인 시 영업일 5~7일 안에 결제 수단으로 환불됩니다.\n"
+               "6. 프로덕션 신청 가능 여부와 승인은 Google Play가 판단하며 본 서비스는 이를 보장하지 않습니다."),
 }
+OLD_REFUND = ("1. 검사 시작 전: 전액 환불.\n2. 검사 시작 후: 남은 검사 기간에 비례하여 부분 환불.\n"
+               "3. 서비스 측 장애로 검사를 수행하지 못한 기간은 연장 또는 환불합니다.\n4. 환불은 결제 수단으로 취소 처리됩니다.\n\n"
+               "※ 세부 기준은 운영 정책에 맞게 관리자 페이지에서 수정해 주세요.")
+SINGLE = ("CLOSED18", "비공개 테스트 18일", 8000, 18, 16, 1)
 FAQS = [
     ("Google 공식 서비스인가요?", "아닙니다. " + NOTICE),
     ("검사 기기 수는 테스터 수와 같은가요?", "아닙니다. 검사 기기 수는 자동화 품질검사를 수행하는 실기기 수량입니다. Google Play 비공개 테스트의 실제 테스터 참여는 별도로 관리됩니다."),
@@ -79,6 +86,20 @@ def run(db: Session) -> None:
                            excel_report=xlsx, priority=prio, is_quote=quote, sort=i,
                            description=f"실기기 {devs}대 · {days}일 · 하루 {runs}회 자동 검사" if not quote else "기기 수·기간 별도 협의",
                            description_en=f"{devs} real devices · {days} days · {runs} run(s)/day" if not quote else "Custom devices and period"))
+    if not db.scalar(select(Product.id).where(Product.code == SINGLE[0])):
+        # 단일 요금제 전환(1회): 기존 상품은 판매 중지로 두고 관리자 화면에서 다시 켤 수 있다.
+        code, name, price, days, devs, runs = SINGLE
+        db.flush()
+        for p in db.scalars(select(Product)):
+            p.is_active = False
+        db.add(Product(code=code, name=name, list_price=price, discount_price=0, price=price, duration_days=days, device_count=devs,
+                       daily_runs=runs, checks=BASE_CHECKS + PERF_CHECKS, ai_analysis=False, pdf_report=True, excel_report=True,
+                       priority=False, is_quote=False, sort=-1,
+                       description="앱 1개 · 검사 기기 16대 · 18일(필수 14일 + 여유 4일) · 매일 오전 2시 실행 · 부가세 포함",
+                       description_en="1 app · 16 test devices · 18 days (14 required + 4 spare) · daily run at 2 AM KST · VAT included"))
+    old_refund = db.scalar(select(LegalDoc).where(LegalDoc.key == "refund", LegalDoc.locale == "ko"))
+    if old_refund and old_refund.body == OLD_REFUND:   # 관리자가 고치지 않은 기본 문구만 새 정책으로 바꾼다
+        old_refund.title, old_refund.body = LEGAL["refund"]
     notifications.seed_templates(db)
     if not db.scalar(select(LegalDoc.id).limit(1)):
         for key, (title, body) in LEGAL.items():

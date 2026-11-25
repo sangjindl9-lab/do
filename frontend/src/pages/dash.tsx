@@ -251,13 +251,16 @@ export function AppDetail() {
               {state === "none" && <Link to={`/dashboard/new-test?app=${id}`}><Button variant="primary">{t("테스트 신청")}</Button></Link>}
               {state === "pending_payment" && <Link to={`/dashboard/pay/${o.pending_order_id}`}><Button variant="primary">{t("결제하기")}</Button></Link>}
               {plan && ["scheduled", "running"].includes(plan.status) && <Button variant={o.period_started ? "secondary" : "primary"} disabled={a.busy || o.queue.length > 0} onClick={() => a.run(() => post(`/plans/${plan.id}/install-request`, {})).then(ov.reload)}>{t(o.queue.length ? "설치 진행 중" : "설치 요청")}</Button>}
+              {plan && o.can_extend && <Button disabled={a.busy} onClick={() => confirm(t("테스트 기간을 18일 무료로 연장할까요? 1회만 가능합니다")) && a.run(() => post(`/plans/${plan.id}/extend`, {})).then(reloadAll)}>{t("무료 연장")}</Button>}
+              {plan && o.refundable && <Button variant="danger" disabled={a.busy} onClick={() => confirm(t("결제를 취소하고 전액 환불받을까요? 배정된 기기와 예약 작업이 모두 해제됩니다")) && a.run(() => post(`/orders/${plan.order_id}/refund-request`, {})).then(reloadAll)}>{t("환불 신청")}</Button>}
               {plan && <Link to={`/dashboard/orders/${plan.order_id}`}><Button>{t("상세 결과")}</Button></Link>}
             </span>
           </div>
           <p className="mt-3 text-sm text-sub">{t(stateText[state] || "")}</p>
           {plan && ["scheduled", "running"].includes(plan.status) && !o.period_started && <div className="mt-4"><Notice tone="warn">{t("설치 요청을 누르면 검사 기기가 차례로 앱을 설치합니다. 설치된 기기")} <span className="num">{o.installed_devices}/{o.install_threshold}</span>{t("대 · 기준 대수 이상 설치되면 그때부터 테스트 기간이 시작됩니다")}</Notice></div>}
           {plan && ["scheduled", "running"].includes(plan.status) && o.period_started && <div className="mt-4"><Notice>{t("매일 오전 2시(한국시간)부터 검사 기기가 앱을 실행하고, 실행 2초 뒤 화면을 캡처해 올립니다. 스토어에 새 버전이 있으면 실행 전에 업데이트합니다. 다음 검사")}: <span className="num">{dt(plan.next_run_at)}</span></Notice></div>}
-          {plan && o.period_started && <p className="mt-3 text-xs leading-5 text-mute">{t("테스트 기간 중 2회 이상 앱을 업데이트하는 것을 권장합니다. 프로덕션 신청 가능 여부는 Play Console 기준입니다")}</p>}
+          {plan && o.period_started && <p className="mt-3 text-xs leading-5 text-mute">{t("시작 후 14일 안에 2회 이상 업데이트하면 18일 무료 연장을 받을 수 있습니다")} · {t("확인된 업데이트")} <span className="num">{o.updates}</span>{t("회")}{o.extended && <> · {t("무료 연장 적용됨")}</>} · {t("프로덕션 신청 가능 여부는 Play Console 기준입니다")}</p>}
+          {plan && o.refundable && <p className="mt-3 text-xs leading-5 text-mute">{t("12대 이상 설치되어 테스트가 시작되기 전에는 전액 환불받을 수 있고, 시작된 뒤에는 환불되지 않습니다")}</p>}
           {state === "waiting_devices" && <div className="mt-4"><Notice tone="warn">{t("가용 검사 기기가 부족하여 배정 대기 중입니다. 기기가 확보되면 자동으로 시작되며 검사 기간은 시작 시점부터 계산됩니다")}</Notice></div>}
         </Card>
 
@@ -362,6 +365,7 @@ export function NewTest() {
   const set = (k: string, v: string) => setF((p) => ({ ...p, [k]: v }));
   const app = apps.data?.find((x) => String(x.id) === f.app_id);
   const product = products.data?.find((x) => String(x.id) === f.product_id);
+  useEffect(() => { const list = (products.data || []).filter((p) => !p.is_quote); if (list.length === 1 && !f.product_id) setF((p) => ({ ...p, product_id: String(list[0].id) })); }, [products.data]);
   useEffect(() => { if (app && !app.versions.some((v: any) => String(v.id) === f.app_version_id)) set("app_version_id", app.versions[0] ? String(app.versions[0].id) : ""); }, [app]); // eslint-disable-line
   useEffect(() => {
     setQuote(null);

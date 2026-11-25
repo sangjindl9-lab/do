@@ -405,6 +405,7 @@ class TestPlan(Base):
     priority = Column(Integer, default=0, nullable=False)
     is_mock = Column(Boolean, default=False, nullable=False)
     ending_notified = Column(Boolean, default=False, nullable=False)
+    extended = Column(Boolean, default=False, nullable=False, server_default="false")  # 무료 연장 사용 여부
     period_started = Column(Boolean, default=False, nullable=False, server_default="false")  # 기준 대수 이상 설치되어 검사 기간이 시작됨
     created_at = TS(default=utcnow, nullable=False)
     order = relationship("Order", lazy="joined")

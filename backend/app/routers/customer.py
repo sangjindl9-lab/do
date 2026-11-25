@@ -306,6 +306,42 @@ def install_request(plan_id: int, customer: Customer = Depends(current_customer)
     return {"ok": True, "jobs_created": n}
 
 
+@router.post("/plans/{plan_id}/extend")
+def extend_plan(plan_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """무료 연장: 시작 후 14일 안에 2회 이상 업데이트가 확인되면 18일을 1회 연장한다."""
+    from ..services import results as result_svc
+    own_plan(db, customer, plan_id)
+    plan = db.scalar(select(TestPlan).where(TestPlan.id == plan_id).with_for_update(of=TestPlan))
+    if plan.extended:
+        raise HTTPException(400, "무료 연장은 1회만 가능합니다.")
+    if plan.status not in ("running", "paused") or not plan.period_started:
+        raise HTTPException(400, "진행 중인 테스트만 연장할 수 있습니다. 종료된 테스트는 고객 문의로 요청해 주세요.")
+    n = result_svc.update_count(db, plan)
+    if n < 2:
+        raise HTTPException(400, f"테스트 시작 후 14일 안에 2회 이상 업데이트한 이력이 필요합니다. (확인된 업데이트 {n}회)")
+    plan.end_at, plan.extended, plan.ending_notified = plan.end_at + timedelta(days=18), True, False
+    db.commit()
+    return {"ok": True, "end_at": plan.end_at}
+
+
+@router.post("/orders/{order_id}/refund-request")
+def refund_request(order_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
+    """환불 신청: 기준 대수 이상 설치되어 테스트가 시작되기 전이면 전액 환불(결제 취소)한다."""
+    from ..models import Payment
+    o = db.scalar(select(Order).where(Order.id == order_id, Order.customer_id == customer.id).with_for_update(of=Order))
+    if not o:
+        raise HTTPException(404, "주문을 찾을 수 없습니다.")
+    payment = db.scalar(select(Payment).where(Payment.order_id == o.id, Payment.status == "paid"))
+    if not payment:
+        raise HTTPException(400, "환불할 결제가 없습니다.")
+    plan = db.scalar(select(TestPlan).where(TestPlan.order_id == o.id))
+    if plan and plan.period_started:
+        raise HTTPException(400, "12대 이상의 기기에 앱이 설치되어 테스트가 시작된 뒤에는 환불할 수 없습니다. 서비스 장애로 인한 환불은 고객 문의로 요청해 주세요.")
+    r = order_svc.refund_payment(db, payment.id, None, "고객 환불 신청(테스트 시작 전)", customer.user_id, f"self-{payment.id}")
+    db.commit()
+    return {"ok": True, "amount": r.amount}
+
+
 @router.get("/apps/{app_id}/overview")
 def app_overview(app_id: int, customer: Customer = Depends(current_customer), db: Session = Depends(get_db)):
     """앱 상세: 현재 상태, 일정, 예약 작업, 리포트, 일별 실행 기록(기기별 실행 화면)."""
@@ -350,6 +386,11 @@ def app_overview(app_id: int, customer: Customer = Depends(current_customer), db
     out["installed_devices"] = len({r.device_id for r in results if any(s.get("key") == "launch" and s.get("status") == "passed" for s in r.steps or [])})
     out["install_threshold"] = min(12, plan.device_count)
     out["period_started"] = plan.period_started
+    from ..services import results as result_svc
+    out["updates"] = result_svc.update_count(db, plan) if plan.period_started else 0
+    out["extended"] = plan.extended
+    out["can_extend"] = plan.period_started and not plan.extended and plan.status in ("running", "paused") and out["updates"] >= 2
+    out["refundable"] = (not plan.period_started) and plan.status in ("waiting_devices", "scheduled", "running", "paused")
     for r in results:
         at = r.finished_at or r.created_at
         key = at.astimezone(KST).strftime("%Y-%m-%d")

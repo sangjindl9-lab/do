@@ -136,7 +136,7 @@ def test_apk_upload_hash_duplicate_and_quarantine(client, customer, db):
 
 def test_products_orders_and_coupon(client, customer, admin):
     products = client.get("/api/public/products").json()
-    assert [p["code"] for p in products][:4] == ["BASIC", "STANDARD", "PRO", "PREMIUM"]
+    assert [p["code"] for p in products][:5] == ["CLOSED18", "BASIC", "STANDARD", "PRO", "PREMIUM"]
     assert {p["code"]: p["price"] for p in products}["PRO"] == 14900
     app, version = customer.make_app()
     code = "T" + uuid.uuid4().hex[:8].upper()

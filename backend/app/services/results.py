@@ -51,6 +51,14 @@ def installed_devices(db: Session, plan: TestPlan) -> int:
     return len({d for d, steps in rows if any(s.get("key") == "launch" and s.get("status") == "passed" for s in steps or [])})
 
 
+def update_count(db: Session, plan: TestPlan) -> int:
+    """테스트 시작 후 14일 안에 검사 기기에서 확인된 앱 업데이트 횟수(설치 버전이 바뀐 횟수)."""
+    rows = db.scalars(select(TestResult.summary).where(TestResult.plan_id == plan.id,
+                                                       TestResult.created_at <= plan.start_at + timedelta(days=14))).all()
+    versions = {(s or {}).get("installed_version") for s in rows} - {None, ""}
+    return max(0, len(versions) - 1)
+
+
 def start_period_if_ready(db: Session, plan: TestPlan) -> None:
     """12대(상품 기기 수가 더 적으면 그 수) 이상 설치되면 그 시점부터 검사 기간을 계산한다."""
     if plan.period_started:

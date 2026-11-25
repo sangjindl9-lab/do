@@ -201,8 +201,22 @@ export function Pricing() {
   const { t } = useI18n();
   const products = useLoad<any[]>(() => get("/public/products"));
   return (
-    <Page title="상품 및 요금제" lead="검사 기기 수와 기간에 따라 선택합니다. 가격은 부가세 포함 여부 등 운영 정책에 따라 변경될 수 있습니다">
+    <Page title="가격 및 환불 정책" lead="단일 요금제입니다. 앱 1개당 8,000원(부가세 포함)으로 18일 동안 검사 기기에서 매일 앱을 실행합니다">
       <PriceTable products={products.data} />
+      <div className="mt-8 grid max-w-5xl gap-4 lg:grid-cols-3">
+        <Card title={t("포함 내용")}><ul className="space-y-2 text-sm leading-6 text-sub">
+          <li>{t("검사 기기 16대, 필수 기간 14일 + 여유 기간 4일 = 18일")}</li>
+          <li>{t("매일 오전 2시(한국시간) 앱 실행, 실행 전 스토어 새 버전 업데이트")}</li>
+          <li>{t("일별 실행 기록·화면 캡처, 보고서, 프로덕션 신청 참고자료")}</li></ul></Card>
+        <Card title={t("무료 연장")}><ul className="space-y-2 text-sm leading-6 text-sub">
+          <li>{t("테스트 시작 후 14일 안에 앱을 2회 이상 업데이트한 이력이 확인되면 추가 결제 없이 18일을 1회 연장합니다")}</li>
+          <li>{t("2~3일 간격 업데이트를 권장합니다. 조건에 해당하지 않으면 다시 결제하여 진행할 수 있습니다")}</li></ul></Card>
+        <Card title={t("환불")}><ul className="space-y-2 text-sm leading-6 text-sub">
+          <li>{t("전액 환불: 12대 이상의 검사 기기에 앱이 설치되지 않은 경우, 서비스 장애로 피해가 발생한 경우")}</li>
+          <li>{t("환불 불가: 12대 이상 설치되어 테스트가 시작된 경우, TWA 앱으로 확인된 경우")}</li>
+          <li>{t("시작 전에는 앱 화면에서 바로 환불됩니다. 장애 환불은 고객 문의 후 영업일 3~5일 심사, 승인 시 5~7일 안에 결제 수단으로 환불됩니다")}</li></ul></Card>
+      </div>
+      <p className="mt-4 text-sm"><Link className="underline" to="/legal/refund">{t("가격 및 환불 정책 전문 보기")}</Link></p>
       <p className="mt-6 max-w-3xl text-[13px] leading-5 text-mute">{t("검사 기기 수는 실제 검사에 사용되는 기기 수량이며 Google Play 비공개 테스트의 독립적인 참여자 수를 의미하지 않습니다")}</p>
     </Page>
   );

@@ -296,3 +296,57 @@ def test_play_flow_install_request_period_start_and_update(client, admin, custom
     assert client.post(f"/api/plans/{plan.id}/install-request", headers=Cust(client).h).status_code == 404
     client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
     MockProvider.store_version.clear()
+
+
+def test_single_plan_price_refund_and_free_extension(client, admin, customer, mock_pg, farm, db):
+    """단일 요금제 8,000원·18일·16대, 시작 전 전액 환불, 시작 후 환불 불가, 2회 업데이트 시 18일 무료 연장."""
+    from app.models import Order, Payment, TestPlan
+    from gat_engine.providers import MockProvider
+    p = {x["code"]: x for x in client.get("/api/public/products").json()}["CLOSED18"]
+    assert (p["price"], p["duration_days"], p["device_count"], p["daily_runs"]) == (8000, 18, 16, 1)
+    refund_doc = client.get("/api/public/legal/refund").json()
+    assert "8,000원" in refund_doc["body"] and "TWA" in refund_doc["body"]
+
+    def new_order():
+        app = client.post("/api/apps", headers=customer.h, json={"package_name": f"com.policy.a{__import__('uuid').uuid4().hex[:8]}", "name": "정책앱", "ownership_confirmed": True}).json()
+        order = customer.order(app, app["versions"][0])           # BASIC: 기기 5대 → 기준 대수 5
+        assert customer.pay(order)[0].status_code == 200
+        return app, order, db.scalar(select(TestPlan).where(TestPlan.order_id == order["id"]))
+
+    # 1) 테스트 시작 전: 고객이 직접 전액 환불
+    app, order, plan = new_order()
+    assert client.get(f"/api/apps/{app['id']}/overview", headers=customer.h).json()["refundable"] is True
+    r = client.post(f"/api/orders/{order['id']}/refund-request", headers=customer.h)
+    assert r.status_code == 200 and r.json()["amount"] == order["final_amount"]
+    db.expire_all()
+    assert db.get(Order, order["id"]).status == "refunded" and db.get(TestPlan, plan.id).status == "cancelled"
+    assert db.scalar(select(Payment).where(Payment.order_id == order["id"])).status == "refunded"
+    assert client.post(f"/api/orders/{order['id']}/refund-request", headers=customer.h).status_code == 400
+
+    # 2) 테스트 시작 후: 환불 불가, 업데이트 2회 미만이면 연장 불가
+    app, order, plan = new_order()
+    pkg = app["package_name"]
+    for ver in ("1.0.0",):
+        MockProvider.store_version[pkg] = ver
+        client.post(f"/api/plans/{plan.id}/install-request", headers=customer.h)
+        farm.cycle()
+    assert client.post(f"/api/orders/{order['id']}/refund-request", headers=customer.h).status_code == 400
+    assert client.post(f"/api/plans/{plan.id}/extend", headers=customer.h).status_code == 400
+    for ver in ("1.1.0", "1.2.0"):
+        MockProvider.store_version[pkg] = ver
+        assert client.post(f"/api/plans/{plan.id}/install-request", headers=customer.h).status_code == 200
+        farm.cycle()
+    ov = client.get(f"/api/apps/{app['id']}/overview", headers=customer.h).json()
+    assert ov["updates"] == 2 and ov["can_extend"] is True and ov["refundable"] is False
+    db.expire_all()
+    before = db.get(TestPlan, plan.id).end_at
+    assert client.post(f"/api/plans/{plan.id}/extend", headers=customer.h).status_code == 200
+    db.expire_all()
+    assert (db.get(TestPlan, plan.id).end_at - before).days == 18
+    assert client.post(f"/api/plans/{plan.id}/extend", headers=customer.h).status_code == 400      # 1회만
+    from conftest import Cust
+    other = Cust(client)
+    assert client.post(f"/api/plans/{plan.id}/extend", headers=other.h).status_code == 404
+    assert client.post(f"/api/orders/{order['id']}/refund-request", headers=other.h).status_code == 404
+    client.post(f"/api/admin/plans/{plan.id}/cancel", headers=admin)
+    MockProvider.store_version.clear()
