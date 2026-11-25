@@ -38,7 +38,7 @@ for path, name in (("/", "고객 웹사이트 메인"), ("/pricing", "요금제 
     check(f"{name} {path}", status == 200 and b'<div id="root">' in body and b"/assets/index-" in body, f"HTTP {status}, {len(body)} bytes")
 status, body, _ = call("/api/public/products")
 products = json.loads(body) if status == 200 else []
-check("상품 API(DB 연동·마이그레이션·초기 데이터)", [p["code"] for p in products][:4] == ["BASIC", "STANDARD", "PRO", "PREMIUM"], str([(p["code"], p["price"]) for p in products]))
+check("상품 API(DB 연동·마이그레이션·초기 데이터)", [(p["code"], p["price"]) for p in products] == [("CLOSED18", 8000)], str([(p["code"], p["price"]) for p in products]))
 status, body, _ = call("/api/public/site")
 site = json.loads(body) if status == 200 else {}
 check("제3자 서비스 고지 문구", "Google의 공식 서비스가 아닌" in site.get("notice", ""))
