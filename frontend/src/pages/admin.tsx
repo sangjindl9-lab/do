@@ -173,7 +173,7 @@ export function UsersPage() {
       <div className="mt-4"><Card title="역할별 메뉴 권한" pad={false}>
         <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-[13px]"><thead><tr className="border-b border-line text-mute"><th className="h-10 px-4 text-left font-normal">권한</th>{staffRoles.map((r: any) => <th key={r.code} className="px-4 font-normal">{r.name}</th>)}</tr></thead>
           <tbody>{(roles.data?.permissions || []).map((p: any) => <tr key={p.code} className="border-b border-line last:border-0"><td className="h-10 px-4">{p.name}</td>{staffRoles.map((r: any) => <td key={r.code} className="px-4 text-center">
-            <input type="checkbox" className="h-4 w-4 accent-[#0f766e]" disabled={r.code === "superadmin"} checked={r.code === "superadmin" || r.permissions.includes(p.code)}
+            <input type="checkbox" className="h-4 w-4 " disabled={r.code === "superadmin"} checked={r.code === "superadmin" || r.permissions.includes(p.code)}
               onChange={(e) => a.run(() => put(`/admin/roles/${r.code}`, { permissions: e.target.checked ? [...r.permissions, p.code] : r.permissions.filter((c: string) => c !== p.code) })).then(roles.reload)} /></td>)}</tr>)}</tbody></table></div></Card></div>
       {form && <Modal title="관리자 추가" onClose={() => setForm(null)}>
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); a.run(() => post("/admin/users", form)).then((r) => { if (r) { setForm(null); users.reload(); } }); }}>

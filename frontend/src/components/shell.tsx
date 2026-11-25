@@ -25,10 +25,10 @@ export function AppShell({ groups, home, badge }: { groups: NavGroup[]; home: st
         if (!items.length) return null;
         return (
           <div key={gi}>
-            {g.label && <div className="mb-2 mt-6 px-2 text-xs text-mute">{t(g.label)}</div>}
+            {g.label && <div className="mb-1.5 mt-6 px-3 text-[12px] font-semibold text-mute">{t(g.label)}</div>}
             <div className={cx("space-y-0.5", !g.label && "mt-3")}>{items.map((i) => (
-              <NavLink key={i.to} to={i.to} end={i.end} onClick={() => setOpen(false)} className={({ isActive }) => cx("flex h-9 items-center gap-2.5 rounded-ctl px-2 text-sm transition-colors duration-150", isActive ? "bg-raised text-ink" : "text-sub hover:bg-raised hover:text-ink")}>
-                <i.icon size={16} strokeWidth={1.5} className="shrink-0 text-mute" /><span className="truncate">{t(i.label)}</span>
+              <NavLink key={i.to} to={i.to} end={i.end} onClick={() => setOpen(false)} className={({ isActive }) => cx("flex h-10 items-center gap-3 rounded-ctl px-3 text-[14px] transition-colors duration-150", isActive ? "bg-accent-soft font-semibold text-accent" : "font-medium text-sub hover:bg-raised hover:text-ink")}>
+                <i.icon size={18} strokeWidth={1.75} className="shrink-0" /><span className="truncate">{t(i.label)}</span>
               </NavLink>))}</div>
           </div>
         );
@@ -36,21 +36,21 @@ export function AppShell({ groups, home, badge }: { groups: NavGroup[]; home: st
     </nav>
   );
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+    <div className="min-h-screen bg-page lg:grid lg:grid-cols-[240px_1fr]">
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-line bg-card lg:flex">
-        <div className="flex h-14 shrink-0 items-center gap-2 px-5"><Logo to={home} />{badge && <span className="rounded border border-line px-1.5 py-0.5 text-[11px] text-mute">{t(badge)}</span>}</div>
+        <div className="flex h-16 shrink-0 items-center gap-2 px-5"><Logo to={home} />{badge && <span className="rounded-md bg-ink px-1.5 py-0.5 text-[11px] font-semibold text-white">{t(badge)}</span>}</div>
         {side}
       </aside>
-      {open && <div className="fixed inset-0 z-40 bg-black/30 lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[264px] bg-card pt-3" onClick={(e) => e.stopPropagation()}>{side}</aside></div>}
+      {open && <div className="fixed inset-0 z-40 bg-[#191f28]/45 lg:hidden" onClick={() => setOpen(false)}><aside className="h-full w-[264px] bg-card pt-3" onClick={(e) => e.stopPropagation()}>{side}</aside></div>}
       <div className="min-w-0">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-page/95 px-4 backdrop-blur sm:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-card px-4 sm:px-8">
           <button className="rounded p-1 text-sub lg:hidden" aria-label="메뉴" onClick={() => setOpen(true)}><Menu size={20} strokeWidth={1.5} /></button>
           <span className="lg:hidden"><Logo to={home} /></span>
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden sm:block"><LocaleSwitch /></span>
             <div className="relative">
               <button aria-label="알림" className="relative rounded p-1.5 text-sub hover:bg-raised" onClick={() => { setBell(!bell); if (!bell && notes.data?.unread) post("/notifications/read").then(notes.reload); }}>
-                <Bell size={18} strokeWidth={1.5} />{!!notes.data?.unread && <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-accent" />}
+                <Bell size={18} strokeWidth={1.5} />{!!notes.data?.unread && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-bad ring-2 ring-white" />}
               </button>
               {bell && (
                 <div className="rise absolute right-0 top-10 z-30 max-h-[70vh] w-[340px] max-w-[90vw] overflow-y-auto rounded-card border border-line bg-card shadow-float">
@@ -62,11 +62,11 @@ export function AppShell({ groups, home, badge }: { groups: NavGroup[]; home: st
                     </button>))}
                 </div>)}
             </div>
-            <Link to={`${home}/account`} className="hidden max-w-[180px] truncate text-[13px] text-sub hover:text-ink sm:block">{user?.name || user?.email}</Link>
+            <Link to={`${home}/account`} className="hidden max-w-[200px] items-center gap-2 text-[14px] font-medium text-ink sm:flex"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[13px] font-bold text-accent">{(user?.name || user?.email || "?").slice(0, 1).toUpperCase()}</span><span className="truncate">{user?.name || user?.email}</span></Link>
             <button aria-label="로그아웃" title={t("로그아웃")} className="rounded p-1.5 text-sub hover:bg-raised" onClick={async () => { await logout(); nav("/"); }}><LogOut size={18} strokeWidth={1.5} /></button>
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-8"><Outlet /></main>
+        <main className="mx-auto max-w-[1400px] px-4 py-8 sm:px-8"><Outlet /></main>
       </div>
     </div>
   );

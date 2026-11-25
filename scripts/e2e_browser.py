@@ -182,7 +182,7 @@ def main():
             if args.shots:
                 pp.screenshot(path=os.path.join(args.shots, "home.png"))
             pp.select_option('select[aria-label="Language"]', "en")
-            if "Test your app on real phones" not in pp.inner_text("h1"):
+            if "16 real devices" not in pp.inner_text("h1"):
                 problems.append("영어 전환 실패")
             if args.shots:
                 pp.screenshot(path=os.path.join(args.shots, "home-en.png"))

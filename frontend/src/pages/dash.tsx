@@ -39,7 +39,7 @@ export function Overview() {
         <Stat label="크래시 / ANR" value={x ? `${num(x.crash_count)} / ${num(x.anr_count)}` : "-"} />
       </div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[2fr_1fr]">
-        <Card title={t("일별 검사 결과")} action={<span className="flex gap-4 text-xs text-mute"><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-accent" />{t("성공")}</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-[#a3a3a3]" />{t("실패·수행 불가")}</span></span>}>
+        <Card title={t("일별 검사 결과")} action={<span className="flex gap-4 text-xs text-mute"><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-accent" />{t("성공")}</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-sm bg-[#c9d1db]" />{t("실패·수행 불가")}</span></span>}>
           <StackedDays data={x?.daily || []} />
         </Card>
         <Card title={t("진행 중인 검사")} pad={false}>
@@ -395,7 +395,7 @@ export function NewTest() {
           <Card title={t("2. 상품")} pad={false}>
             {(products.data || []).filter((p) => !p.is_quote).map((p) => (
               <label key={p.id} className={cx("flex cursor-pointer items-center gap-4 border-b border-line px-5 py-4 last:border-0 transition-colors duration-150", String(p.id) === f.product_id ? "bg-accent-soft" : "hover:bg-raised")}>
-                <input type="radio" name="product" className="accent-[#0f766e]" checked={String(p.id) === f.product_id} onChange={() => set("product_id", String(p.id))} required />
+                <input type="radio" name="product" className="" checked={String(p.id) === f.product_id} onChange={() => set("product_id", String(p.id))} required />
                 <span className="flex-1"><span className="font-medium">{p.name}</span><span className="num ml-3 text-[13px] text-sub">{p.device_count}{t("대")} · {p.duration_days}{t("일")} · {t("하루")} {p.daily_runs}{t("회")}</span></span>
                 <span className="num">{won(p.price)}</span>
               </label>))}

@@ -1,4 +1,4 @@
-import { Menu, X } from "lucide-react";
+import { Bug, Check as CheckIcon, Clock, Download, FileText, Image as ImageIcon, ListChecks, Menu, RefreshCw, Smartphone, Users, X } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button, Card, Check, Field, Input, Msg, Notice, Select, Table, cx, useAction, useLoad } from "../components/ui";
@@ -7,7 +7,7 @@ import { useAuth } from "../lib/auth";
 import { dt, won } from "../lib/format";
 import { LOCALES, useI18n } from "../lib/i18n";
 
-const NAV = [["/service", "서비스 소개"], ["/how-it-works", "이용 방법"], ["/pricing", "요금제"], ["/devices", "지원 기기"], ["/faq", "자주 묻는 질문"], ["/notices", "공지사항"]];
+const NAV = [["/service", "서비스 소개"], ["/how-it-works", "이용 방법"], ["/pricing", "가격·환불"], ["/devices", "검사 기기"], ["/faq", "자주 묻는 질문"], ["/notices", "공지사항"]];
 const CHECKS: Record<string, string> = {
   install: "APK 설치", launch: "앱 실행", cold_start: "초기 로딩 시간", display: "화면 표시", orientation: "화면 방향 변경", restart: "종료·재실행",
   background: "백그라운드 전환·복귀", permissions: "권한 요청 동작", cpu: "CPU 사용량", memory: "RAM 사용량", storage: "저장공간 사용량",
@@ -18,8 +18,8 @@ export { CHECKS };
 export function Logo({ to = "/" }: { to?: string }) {
   const { t } = useI18n();
   return (
-    <Link to={to} className="flex items-center gap-2 text-[16px] font-semibold tracking-tight text-ink">
-      <svg width="22" height="22" viewBox="0 0 32 32" aria-hidden><rect width="32" height="32" rx="7" fill="#171717" /><g fill="#ededed"><rect x="7" y="7" width="5" height="8" rx="1.2" /><rect x="13.5" y="7" width="5" height="8" rx="1.2" /><rect x="20" y="7" width="5" height="8" rx="1.2" fill="#2dd4bf" /><rect x="7" y="17" width="5" height="8" rx="1.2" /><rect x="13.5" y="17" width="5" height="8" rx="1.2" /><rect x="20" y="17" width="5" height="8" rx="1.2" /></g></svg>
+    <Link to={to} className="flex items-center gap-2.5 text-[18px] font-extrabold tracking-[-0.03em] text-ink">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden><rect width="32" height="32" rx="9" fill="#1a63f5" /><rect x="10" y="5.5" width="12" height="21" rx="3" fill="#fff" /><path d="M12.8 16.2l2.4 2.4 4.2-4.6" fill="none" stroke="#1a63f5" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
       {t("구글자동테스터")}
     </Link>
   );
@@ -27,7 +27,7 @@ export function Logo({ to = "/" }: { to?: string }) {
 
 export function LocaleSwitch() {
   const { locale, setLocale } = useI18n();
-  return <select aria-label="Language" value={locale} onChange={(e) => setLocale(e.target.value)} className="h-8 rounded-ctl border border-line bg-card px-2 text-[13px] text-sub">{LOCALES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}</select>;
+  return <select aria-label="Language" value={locale} onChange={(e) => setLocale(e.target.value)} className="h-9 rounded-ctl bg-raised px-2 text-[13px] font-medium text-sub">{LOCALES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}</select>;
 }
 
 export function PublicLayout() {
@@ -37,61 +37,63 @@ export function PublicLayout() {
   const site = useLoad(() => get("/public/site"));
   const home = user ? (user.is_staff ? "/admin" : "/dashboard") : null;
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-30 border-b border-line bg-page/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1200px] items-center gap-8 px-6">
+    <div className="flex min-h-screen flex-col bg-card">
+      <header className="sticky top-0 z-30 border-b border-line bg-card">
+        <div className="mx-auto flex h-16 max-w-[1160px] items-center gap-10 px-5">
           <Logo />
-          <nav className="hidden flex-1 items-center gap-6 lg:flex">{NAV.map(([to, label]) => <NavLink key={to} to={to} className={({ isActive }) => cx("text-sm transition-colors duration-150", isActive ? "text-ink" : "text-sub hover:text-ink")}>{t(label)}</NavLink>)}</nav>
-          <div className="ml-auto flex items-center gap-4">
+          <nav className="hidden flex-1 items-center gap-7 lg:flex">{NAV.map(([to, label]) => <NavLink key={to} to={to} className={({ isActive }) => cx("text-[15px] font-medium transition-colors duration-150", isActive ? "text-accent" : "text-sub hover:text-ink")}>{t(label)}</NavLink>)}</nav>
+          <div className="ml-auto flex items-center gap-3">
             <span className="hidden sm:block"><LocaleSwitch /></span>
-            {home ? <Link to={home}><Button variant="primary" size="sm">{t("대시보드")}</Button></Link> : <>
-              <Link to="/login" className="hidden text-sm text-sub hover:text-ink sm:block">{t("로그인")}</Link>
-              <Link to="/register"><Button variant="primary" size="sm">{t("시작하기")}</Button></Link></>}
-            <button className="rounded p-1 text-sub lg:hidden" aria-label="메뉴" onClick={() => setOpen(!open)}>{open ? <X size={20} strokeWidth={1.5} /> : <Menu size={20} strokeWidth={1.5} />}</button>
+            {home ? <Link to={home}><Button variant="primary">{t("대시보드")}</Button></Link> : <>
+              <Link to="/login" className="hidden px-2 text-[15px] font-medium text-sub hover:text-ink sm:block">{t("로그인")}</Link>
+              <Link to="/register"><Button variant="primary">{t("시작하기")}</Button></Link></>}
+            <button className="rounded p-1 text-sub lg:hidden" aria-label="메뉴" onClick={() => setOpen(!open)}>{open ? <X size={22} strokeWidth={1.75} /> : <Menu size={22} strokeWidth={1.75} />}</button>
           </div>
         </div>
-        {open && <nav className="border-t border-line px-6 py-2 lg:hidden">{NAV.map(([to, label]) => <Link key={to} to={to} onClick={() => setOpen(false)} className="block h-10 leading-10 text-sub">{t(label)}</Link>)}<Link to="/login" onClick={() => setOpen(false)} className="block h-10 leading-10 text-sub sm:hidden">{t("로그인")}</Link><div className="py-2 sm:hidden"><LocaleSwitch /></div></nav>}
+        {open && <nav className="border-t border-line px-5 py-2 lg:hidden">{NAV.map(([to, label]) => <Link key={to} to={to} onClick={() => setOpen(false)} className="block h-11 font-medium leading-[44px] text-sub">{t(label)}</Link>)}<Link to="/login" onClick={() => setOpen(false)} className="block h-11 font-medium leading-[44px] text-sub sm:hidden">{t("로그인")}</Link><div className="py-2 sm:hidden"><LocaleSwitch /></div></nav>}
       </header>
       <main className="flex-1"><Outlet /></main>
-      <footer className="border-t border-line">
-        <div className="mx-auto max-w-[1200px] px-6 py-10">
-          <p className="max-w-3xl text-[13px] leading-5 text-mute">{t(site.data?.notice || "")}</p>
-          <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-sub">
+      <footer className="bg-[#f7f8fa]">
+        <div className="mx-auto max-w-[1160px] px-5 py-12">
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-3 text-[14px] font-medium text-sub">
             <Link to="/legal/terms" className="hover:text-ink">{t("이용약관")}</Link>
-            <Link to="/legal/privacy" className="hover:text-ink">{t("개인정보처리방침")}</Link>
-            <Link to="/legal/refund" className="hover:text-ink">{t("환불 정책")}</Link>
+            <Link to="/legal/privacy" className="font-bold text-ink">{t("개인정보처리방침")}</Link>
+            <Link to="/legal/refund" className="hover:text-ink">{t("가격 및 환불 정책")}</Link>
             {site.data?.support_email && <a href={`mailto:${site.data.support_email}`} className="hover:text-ink">{site.data.support_email}</a>}
-            <span className="ml-auto text-mute">Google Auto Tester</span>
           </div>
+          <p className="mt-6 max-w-3xl text-[13px] leading-6 text-mute">{t(site.data?.notice || "")}</p>
+          <p className="mt-4 text-[13px] text-mute">© {t("구글자동테스터")}</p>
         </div>
       </footer>
     </div>
   );
 }
 
-const Section = ({ children, className }: { children: ReactNode; className?: string }) => <section className={cx("mx-auto max-w-[1200px] px-6", className)}>{children}</section>;
+const Section = ({ children, className }: { children: ReactNode; className?: string }) => <section className={cx("mx-auto max-w-[1160px] px-5", className)}>{children}</section>;
+const H2 = ({ kicker, children }: { kicker?: string; children: ReactNode }) => { const { t } = useI18n(); return <div>{kicker && <p className="text-[15px] font-bold text-accent">{t(kicker)}</p>}<h2 className="mt-2 text-[28px] font-bold leading-[1.3] sm:text-[36px]">{children}</h2></div>; };
 
-/** 20칸 폰팜 랙. 실제 등록된 실기기 수만큼만 칸이 켜진다(모의 장비 제외). */
-function Rack({ total, models }: { total: number; models: any[] }) {
+const TINTS = ["#dbe8ff", "#ffe7d1", "#d9f3e6", "#ece4ff", "#ffe0e3", "#d8f0f6", "#fff0c2", "#e4e8ee"];
+/** 일별 실행 기록 화면의 예시 그림. 실제 고객 데이터가 아니라 화면 구성을 보여주는 그림이다. */
+function RecordPreview() {
   const { t } = useI18n();
-  const lit = Math.min(20, total);
   return (
-    <div className="rounded-panel bg-rack-bg p-5 text-rack-text shadow-float">
-      <div className="flex items-center justify-between font-mono text-xs">
-        <span>PHONE FARM BOX · 20-IN-1</span>
-        <span className="flex items-center gap-2"><span className={cx("h-1.5 w-1.5 rounded-full", total ? "bg-[#2dd4bf]" : "bg-[#85858b]")} />{total ? `${total} ${t("대 연결")}` : t("연결 대기")}</span>
+    <div className="rounded-panel border border-line bg-card p-5 shadow-lift sm:p-6">
+      <div className="flex items-center justify-between">
+        <div><div className="text-[13px] font-medium text-mute">{t("일별 실행 기록")} · {t("예시 화면")}</div><div className="mt-0.5 text-[18px] font-bold">{t("3일차")}</div></div>
+        <span className="inline-flex h-7 items-center rounded-md bg-ok-soft px-2.5 text-[13px] font-semibold text-ok">{t("실행 확인")} 16/16</span>
       </div>
-      <div className="mt-4 grid grid-cols-5 gap-2 sm:grid-cols-10 lg:grid-cols-5 xl:grid-cols-10">
-        {Array.from({ length: 20 }, (_, i) => (
-          <div key={i} className={cx("flex aspect-[9/16] flex-col justify-between rounded-md border p-1.5", i < lit ? "border-rack-line bg-rack-cell" : "border-dashed border-rack-line")}>
-            <span className={cx("h-1 w-1 rounded-full", i < lit ? "bg-[#2dd4bf]" : "bg-transparent")} />
-            <span className="font-mono text-[10px] leading-none">{String(i + 1).padStart(2, "0")}</span>
-          </div>
-        ))}
+      <div className="mt-5 grid grid-cols-4 gap-2.5 sm:grid-cols-8 lg:grid-cols-4 xl:grid-cols-8">
+        {Array.from({ length: 16 }, (_, i) => (
+          <div key={i}>
+            <div className="aspect-[9/17] overflow-hidden rounded-[10px] border border-line bg-card">
+              <div className="h-[34%]" style={{ background: TINTS[i % TINTS.length] }} />
+              <div className="space-y-1 p-1.5"><div className="h-1 w-4/5 rounded bg-[#d5dbe3]" /><div className="h-1 w-3/5 rounded bg-[#e4e8ee]" /><div className="h-1 w-2/3 rounded bg-[#e4e8ee]" /></div>
+            </div>
+            <div className="num mt-1 text-center text-[11px] font-medium text-mute">02:{String(1 + i * 2).padStart(2, "0")}</div>
+          </div>))}
       </div>
-      <div className="mt-4 border-t border-rack-line pt-4 font-mono text-xs leading-5">
-        {total ? models.slice(0, 3).map((m) => <div key={m.model + m.android_version} className="flex justify-between"><span>{m.manufacturer} {m.model} · Android {m.android_version}</span><span>×{m.count}</span></div>)
-          : <span>{t("등록된 실기기가 아직 없습니다. 장비가 연결되면 이 화면에 실제 수량이 표시됩니다")}</span>}
+      <div className="mt-5 grid grid-cols-3 divide-x divide-line rounded-ctl bg-raised py-3 text-center">
+        {[["테스트 진행", "3일차"], ["참여 기기", "16대"], ["총 실행 횟수", "48회"]].map(([k, v]) => <div key={k}><div className="text-[12px] font-medium text-mute">{t(k)}</div><div className="num mt-0.5 text-[16px] font-bold">{t(v)}</div></div>)}
       </div>
     </div>
   );
@@ -101,80 +103,111 @@ export function Home() {
   const { t } = useI18n();
   const devices = useLoad(() => get("/public/devices"));
   const products = useLoad<any[]>(() => get("/public/products"));
-  const steps = [["앱 등록", "패키지명과 APK를 등록하고 검사 권한을 확인합니다"], ["상품 선택·결제", "검사 기기 수와 기간을 고르고 결제합니다"],
-    ["실기기 자동 검사", "배정된 실기기에서 정해진 기간 동안 매일 반복 검사합니다"], ["결과·보고서", "기기별 결과, 스크린샷, 오류 로그와 PDF 보고서를 받습니다"]];
+  const plan = (products.data || []).find((p) => !p.is_quote);
+  const steps: [typeof ListChecks, string, string][] = [
+    [Users, "테스터 목록 추가", "테스터 목록 CSV를 받아 Play Console 비공개 테스트의 테스터로 추가합니다"],
+    [Smartphone, "앱 등록", "Play 스토어 링크나 패키지명만 넣으면 앱 정보를 불러옵니다"],
+    [Download, "결제 후 설치 요청", "버튼 한 번이면 검사 기기가 차례로 앱을 설치합니다"],
+    [ListChecks, "매일 실행 기록 확인", "기기별 실행 화면과 실행 횟수를 날짜별로 확인합니다"]];
+  const feats: [typeof ListChecks, string, string][] = [
+    [Smartphone, "실제 Android 기기", "에뮬레이터가 아닌 실기기에서 Play 스토어로 앱을 설치하고 실행합니다"],
+    [Clock, "매일 오전 2시 자동 실행", "테스트 기간 동안 하루도 빠지지 않고 앱을 실행하고 화면을 남깁니다"],
+    [RefreshCw, "새 버전 자동 업데이트", "스토어에 새 버전을 올리면 실행 전에 먼저 업데이트합니다"],
+    [ImageIcon, "기기별 실행 화면", "어느 기기에서 언제 실행했는지 화면 캡처로 바로 확인합니다"],
+    [Bug, "크래시·ANR 기록", "실행 중 발생한 크래시와 응답 없음을 로그와 함께 기록합니다"],
+    [FileText, "보고서와 신청 참고자료", "PDF·Excel 보고서와 프로덕션 신청에 참고할 기록 요약을 제공합니다"]];
   return (
     <>
-      <Section className="grid items-center gap-12 py-16 lg:grid-cols-[1fr_1.1fr] lg:py-24">
-        <div className="rise">
-          <p className="font-mono text-xs text-accent">{t("Android 실기기 자동화 품질검사")}</p>
-          <h1 className="mt-4 text-[38px] font-medium leading-[1.12] tracking-[-0.02em] sm:text-[52px]">{t("출시 전 앱을 실제 폰 여러 대에서 매일 자동으로 검사합니다")}</h1>
-          <p className="mt-6 max-w-[34rem] text-[17px] leading-7 text-sub">{t("설치, 실행, 화면 전환, 크래시, ANR, 성능을 폰팜 실기기에서 반복 측정하고 기기별 결과와 보고서를 제공합니다")}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link to="/register"><Button variant="primary" size="lg">{t("테스트 신청하기")}</Button></Link>
-            <Link to="/pricing"><Button size="lg">{t("요금제 보기")}</Button></Link>
+      <div className="bg-[#f3f7ff]">
+        <Section className="grid items-center gap-12 py-14 lg:grid-cols-[1fr_1.05fr] lg:py-20">
+          <div>
+            <span className="inline-flex h-8 items-center rounded-full bg-card px-3.5 text-[13px] font-bold text-accent shadow-sm2">{t("Google Play 비공개 테스트용")}</span>
+            <h1 className="mt-5 text-[36px] font-extrabold leading-[1.25] tracking-[-0.03em] sm:text-[52px]">{t("비공개 테스트 14일,")}<br />{t("실기기 16대가")}<br /><span className="text-accent">{t("매일 실행합니다")}</span></h1>
+            <p className="mt-6 max-w-[32rem] text-[17px] leading-8 text-sub">{t("테스터 목록을 추가하고 앱만 등록하세요. 설치, 매일 실행, 업데이트 확인, 실행 화면 기록까지 자동으로 진행합니다")}</p>
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              <Link to="/register"><Button variant="primary" size="lg">{plan ? `${won(plan.price)}${t("으로 시작하기")}` : t("시작하기")}</Button></Link>
+              <Link to="/how-it-works"><Button size="lg" className="!bg-card">{t("이용 방법 보기")}</Button></Link>
+            </div>
+            <p className="mt-5 text-[14px] text-mute">{t("앱 1개 기준 · 부가세 포함 · 12대 이상 설치되지 않으면 전액 환불")}</p>
           </div>
+          <RecordPreview />
+        </Section>
+      </div>
+
+      <Section className="py-20">
+        <H2 kicker="진행 순서">{t("등록부터 실행 기록까지 네 단계")}</H2>
+        <ol className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{steps.map(([Icon, title, body], i) => (
+          <li key={title} className="rounded-card bg-[#f7f8fa] p-6">
+            <div className="flex items-center justify-between"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-card text-accent shadow-sm2"><Icon size={22} strokeWidth={1.75} /></span><span className="num text-[14px] font-bold text-mute">{i + 1} / 4</span></div>
+            <h3 className="mt-5 text-[18px] font-bold">{t(title)}</h3><p className="mt-2 text-[15px] leading-6 text-sub">{t(body)}</p>
+          </li>))}</ol>
+      </Section>
+
+      <div className="bg-[#f7f8fa]">
+        <Section className="py-20">
+          <H2 kicker="제공 내용">{t("테스트 기간 동안 이렇게 진행합니다")}</H2>
+          <div className="mt-10 grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">{feats.map(([Icon, title, body]) => (
+            <div key={title} className="flex gap-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent"><Icon size={22} strokeWidth={1.75} /></span>
+              <div><h3 className="text-[17px] font-bold">{t(title)}</h3><p className="mt-1.5 text-[15px] leading-6 text-sub">{t(body)}</p></div></div>))}</div>
+        </Section>
+      </div>
+
+      <Section className="py-20">
+        <H2 kicker="가격">{t("요금제는 하나입니다")}</H2>
+        <div className="mt-10"><PlanCard plan={plan} /></div>
+      </Section>
+
+      <Section className="pb-20">
+        <div className="flex flex-col items-start justify-between gap-6 rounded-panel bg-accent px-8 py-10 text-white sm:flex-row sm:items-center sm:px-12">
+          <div><h2 className="text-[26px] font-bold leading-9">{t("지금 앱을 등록해 보세요")}</h2><p className="mt-2 text-[16px] text-white/80">{devices.data?.total ? `${t("현재 연결된 검사 기기")} ${devices.data.total}${t("대")}` : t("가입은 무료이고, 결제 전까지 비용이 들지 않습니다")}</p></div>
+          <Link to="/register"><Button size="lg" className="!bg-white !text-accent hover:!bg-[#f3f7ff]">{t("무료로 가입하기")}</Button></Link>
         </div>
-        <Rack total={devices.data?.total ?? 0} models={devices.data?.models ?? []} />
-      </Section>
-      <Section className="border-t border-line py-16">
-        <h2 className="text-[24px] font-medium">{t("진행 순서")}</h2>
-        <ol className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{steps.map(([title, body], i) => (
-          <li key={title}><span className="num text-[13px] text-mute">{String(i + 1).padStart(2, "0")}</span><h3 className="mt-2 text-[16px] font-medium">{t(title)}</h3><p className="mt-2 text-sm text-sub">{t(body)}</p></li>))}</ol>
-      </Section>
-      <Section className="border-t border-line py-16">
-        <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
-          <div><h2 className="text-[24px] font-medium">{t("검사 항목")}</h2><p className="mt-3 text-sm text-sub">{t("수행하지 못한 항목은 성공으로 기록하지 않고 '미수행'으로 표시합니다")}</p></div>
-          <ul className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">{Object.values(CHECKS).map((c) => <li key={c} className="flex items-center gap-2 text-sm text-sub"><span className="h-1.5 w-1.5 rounded-full bg-accent" />{t(c)}</li>)}</ul>
-        </div>
-      </Section>
-      <Section className="border-t border-line py-16">
-        <div className="flex items-end justify-between"><h2 className="text-[24px] font-medium">{t("요금제")}</h2><Link to="/pricing" className="text-sm text-sub hover:text-ink">{t("전체 비교")}</Link></div>
-        <div className="mt-8"><PriceTable products={products.data} compact /></div>
       </Section>
     </>
   );
 }
 
-function PriceTable({ products, compact }: { products: any[] | null; compact?: boolean }) {
-  const { t, locale } = useI18n();
-  if (!products) return <p className="text-mute">{t("불러오는 중")}</p>;
+function PlanCard({ plan }: { plan: any }) {
+  const { t } = useI18n();
+  const inc = ["검사 기기 16대, 필수 기간 14일 + 여유 기간 4일 = 18일", "매일 오전 2시(한국시간) 앱 실행, 실행 전 스토어 새 버전 업데이트", "일별 실행 기록·화면 캡처, 보고서, 프로덕션 신청 참고자료"];
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-card">
-      <table className="w-full min-w-[720px] text-left text-sm">
-        <thead><tr className="border-b border-line text-[13px] text-mute"><th className="h-11 px-5 font-normal">{t("상품")}</th><th className="px-5 text-right font-normal">{t("검사 기기")}</th><th className="px-5 text-right font-normal">{t("검사 기간")}</th><th className="px-5 text-right font-normal">{t("일일 검사")}</th>{!compact && <th className="px-5 font-normal">{t("보고서·분석")}</th>}<th className="px-5 text-right font-normal">{t("가격")}</th><th className="px-5" /></tr></thead>
-        <tbody>{products.map((p) => (
-          <tr key={p.id} className="border-b border-line last:border-0">
-            <td className="h-14 px-5"><span className="font-medium">{p.name}</span><span className="mt-0.5 block text-xs text-mute">{locale === "en" ? p.description_en : p.description}</span></td>
-            <td className="num px-5 text-right">{p.is_quote ? "-" : `${p.device_count}${t("대")}`}</td>
-            <td className="num px-5 text-right">{p.is_quote ? "-" : `${p.duration_days}${t("일")}`}</td>
-            <td className="num px-5 text-right">{p.is_quote ? "-" : `${p.daily_runs}${t("회")}`}</td>
-            {!compact && <td className="px-5 text-[13px] text-sub">{[p.pdf_report && "PDF", p.excel_report && "Excel", p.ai_analysis && t("AI 오류 분석(선택)"), p.priority && t("우선 배정")].filter(Boolean).join(" · ")}</td>}
-            <td className="num px-5 text-right">{p.is_quote ? t("별도 견적") : <>{p.list_price > p.price && <s className="mr-2 text-mute">{won(p.list_price)}</s>}{won(p.price)}</>}</td>
-            <td className="px-5 text-right"><Link to={p.is_quote ? "/dashboard/support" : "/dashboard/new-test"}><Button size="sm">{t(p.is_quote ? "문의" : "신청")}</Button></Link></td>
-          </tr>))}</tbody>
-      </table>
+    <div className="grid overflow-hidden rounded-panel border border-line lg:grid-cols-[1fr_1.15fr]">
+      <div className="bg-card p-8 sm:p-10">
+        <div className="text-[15px] font-bold text-accent">{plan?.name || t("비공개 테스트 18일")}</div>
+        <div className="mt-3 flex items-end gap-2"><span className="num text-[48px] font-extrabold leading-none tracking-[-0.03em]">{plan ? plan.price.toLocaleString("ko-KR") : "-"}</span><span className="pb-1 text-[20px] font-bold">{t("원")}</span><span className="pb-1.5 text-[14px] text-mute">/ {t("앱 1개 · 부가세 포함")}</span></div>
+        <ul className="mt-8 space-y-3.5">{inc.map((x) => <li key={x} className="flex gap-3 text-[15px] leading-6 text-sub"><span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-white"><CheckIcon size={13} strokeWidth={3} /></span>{t(x)}</li>)}</ul>
+        <Link to="/dashboard/new-test" className="mt-9 block"><Button variant="primary" size="lg" className="w-full">{t("테스트 신청하기")}</Button></Link>
+      </div>
+      <div className="grid content-start gap-8 bg-[#f7f8fa] p-8 sm:p-10">
+        <div><h3 className="text-[18px] font-bold">{t("무료 연장")}</h3><p className="mt-2 text-[15px] leading-7 text-sub">{t("테스트 시작 후 14일 안에 앱을 2회 이상 업데이트한 이력이 확인되면 추가 결제 없이 18일을 1회 연장합니다")}</p></div>
+        <div><h3 className="text-[18px] font-bold">{t("환불")}</h3>
+          <dl className="mt-3 space-y-3 text-[15px] leading-6">
+            <div className="flex gap-3"><dt className="inline-flex h-6 shrink-0 items-center rounded-md bg-ok-soft px-2 text-[12px] font-semibold text-ok">{t("전액 환불")}</dt><dd className="text-sub">{t("12대 이상의 검사 기기에 앱이 설치되지 않은 경우, 서비스 장애로 피해가 발생한 경우")}</dd></div>
+            <div className="flex gap-3"><dt className="inline-flex h-6 shrink-0 items-center rounded-md bg-bad-soft px-2 text-[12px] font-semibold text-bad">{t("환불 불가")}</dt><dd className="text-sub">{t("12대 이상 설치되어 테스트가 시작된 경우, TWA 앱으로 확인된 경우")}</dd></div>
+          </dl></div>
+        <Link to="/legal/refund" className="text-[14px] font-semibold text-accent">{t("가격 및 환불 정책 전문 보기")} →</Link>
+      </div>
     </div>
   );
 }
 
 const Page = ({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) => {
   const { t } = useI18n();
-  return <Section className="py-14"><h1 className="text-[32px] font-medium leading-tight">{t(title)}</h1>{lead && <p className="mt-4 max-w-2xl text-[16px] leading-7 text-sub">{t(lead)}</p>}<div className="mt-10">{children}</div></Section>;
+  return <><div className="bg-[#f7f8fa]"><Section className="py-12 sm:py-14"><h1 className="text-[30px] font-extrabold leading-[1.3] tracking-[-0.03em] sm:text-[38px]">{t(title)}</h1>{lead && <p className="mt-3 max-w-2xl text-[17px] leading-7 text-sub">{t(lead)}</p>}</Section></div><Section className="py-12">{children}</Section></>;
 };
 
 export function Service() {
   const { t } = useI18n();
-  const items = [["실기기 폰팜", "에뮬레이터가 아닌 실제 Android 기기에서 검사합니다. 기기는 표준 ADB로 제어합니다"],
-    ["정해진 기간 반복 검사", "상품별 기간 동안 하루 정해진 횟수만큼 자동으로 검사하고, 실패한 작업은 자동 재시도합니다"],
-    ["기기별 결과와 증적", "기기별 성공·실패, 실제 스크린샷, 크래시·ANR 로그, 성능 측정값을 그대로 보여줍니다"],
-    ["규칙 기반 오류 분석", "크래시 로그를 유형과 심각도로 분류하고 중복 오류를 묶습니다. AI 분석은 선택 사항이며 '추정'으로 구분 표시합니다"],
-    ["검사 시나리오", "UI 요소 식별자 기반으로 버튼 선택, 입력, 화면 검증 단계를 직접 구성할 수 있습니다"],
-    ["PDF·Excel 보고서", "종합, 일별, 기기별, 버전별, 오류 분석, 성능, 스크린샷, 완료 보고서를 내려받습니다"]];
+  const items: [typeof ListChecks, string, string][] = [[Smartphone, "실기기 폰팜", "에뮬레이터가 아닌 실제 Android 기기에서 검사합니다. 기기는 표준 ADB로 제어합니다"],
+    [Clock, "정해진 기간 반복 검사", "상품별 기간 동안 하루 정해진 횟수만큼 자동으로 검사하고, 실패한 작업은 자동 재시도합니다"],
+    [ImageIcon, "기기별 결과와 증적", "기기별 성공·실패, 실제 스크린샷, 크래시·ANR 로그, 성능 측정값을 그대로 보여줍니다"],
+    [Bug, "규칙 기반 오류 분석", "크래시 로그를 유형과 심각도로 분류하고 중복 오류를 묶습니다. AI 분석은 선택 사항이며 '추정'으로 구분 표시합니다"],
+    [ListChecks, "검사 시나리오", "UI 요소 식별자 기반으로 버튼 선택, 입력, 화면 검증 단계를 직접 구성할 수 있습니다"],
+    [FileText, "PDF·Excel 보고서", "종합, 일별, 기기별, 버전별, 오류 분석, 성능, 스크린샷, 완료 보고서를 내려받습니다"]];
   return (
     <Page title="서비스 소개" lead="구글자동테스터는 Android 앱 개발자를 위한 실기기 자동화 품질검사 서비스입니다">
-      <div className="grid gap-x-12 gap-y-10 md:grid-cols-2">{items.map(([h, b]) => <div key={h}><h2 className="text-[17px] font-medium">{t(h)}</h2><p className="mt-2 text-sm leading-6 text-sub">{t(b)}</p></div>)}</div>
-      <div className="mt-12 max-w-3xl space-y-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{items.map(([Icon, h, b]) => <div key={h} className="rounded-card border border-line p-6"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent-soft text-accent"><Icon size={22} strokeWidth={1.75} /></span><h2 className="mt-5 text-[18px] font-bold">{t(h)}</h2><p className="mt-2 text-[15px] leading-6 text-sub">{t(b)}</p></div>)}</div>
+      <div className="mt-10 max-w-3xl space-y-3">
         <Notice>{t("본 서비스는 Google의 공식 서비스가 아닌 독립적인 제3자 앱 품질검사 서비스입니다")}</Notice>
         <Notice>{t("기기 자동 검사 기록은 Google Play 비공개 테스트의 인간 테스터 참여로 집계되지 않으며, 테스트 참여 요건을 대신하지 않습니다. 프로덕션 승인을 보장하지 않습니다")}</Notice>
       </div>
@@ -184,14 +217,18 @@ export function Service() {
 
 export function HowTo() {
   const { t } = useI18n();
-  const steps = [["회원가입", "이메일로 가입합니다"], ["앱 등록", "앱 이름, 패키지명을 입력하고 검사 권한 보유를 확인합니다. APK를 올리면 형식·패키지명·해시를 검증합니다"],
-    ["테스트 신청", "앱 버전과 상품을 고르고 필요하면 검사 시나리오와 희망 Android 버전을 지정합니다"], ["결제", "결제가 서버에서 검증되면 주문이 확정됩니다"],
-    ["기기 자동 배정", "가용 실기기를 자동 배정합니다. 기기가 부족하면 대기 상태가 되고 확보되는 즉시 시작합니다"],
-    ["반복 검사", "검사 기간 동안 매일 자동 검사하며 진행 현황을 대시보드에서 확인합니다"], ["완료·보고서", "기간이 끝나면 최종 보고서가 자동 생성되고 알림을 보냅니다"]];
+  const steps = [["회원가입", "이메일로 가입합니다"],
+    ["비공개 테스트 출시", "Play Console에서 비공개 테스트 트랙에 앱을 출시합니다"],
+    ["테스터 목록 추가", "대시보드의 테스터 목록에서 CSV를 받아 Play Console 비공개 테스트의 이메일 목록에 모두 추가합니다"],
+    ["앱 등록", "확인 항목을 체크하고 Play 스토어 링크나 패키지명을 넣으면 앱 정보를 불러옵니다"],
+    ["테스트 신청·결제", "결제가 서버에서 검증되면 주문이 확정되고 검사 기기가 배정됩니다"],
+    ["설치 요청", "앱 화면에서 설치 요청을 누르면 검사 기기가 차례로 앱을 설치합니다. 12대 이상 설치되면 테스트 기간이 시작됩니다"],
+    ["매일 실행", "매일 오전 2시(한국시간)에 앱을 실행하고 실행 화면을 기록합니다. 새 버전은 실행 전에 업데이트합니다"],
+    ["완료·보고서", "기간이 끝나면 최종 보고서가 자동 생성되고 알림을 보냅니다"]];
   return (
-    <Page title="이용 방법">
-      <ol className="max-w-3xl">{steps.map(([h, b], i) => (
-        <li key={h} className="grid grid-cols-[48px_1fr] border-t border-line py-5 first:border-0"><span className="num text-mute">{String(i + 1).padStart(2, "0")}</span><div><h2 className="text-[16px] font-medium">{t(h)}</h2><p className="mt-1 text-sm text-sub">{t(b)}</p></div></li>))}</ol>
+    <Page title="이용 방법" lead="앱을 비공개 테스트로 출시한 뒤 아래 순서대로 진행합니다">
+      <ol className="max-w-3xl space-y-3">{steps.map(([h, b], i) => (
+        <li key={h} className="flex gap-5 rounded-card border border-line p-5 sm:p-6"><span className="num flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-[15px] font-bold text-white">{i + 1}</span><div><h2 className="text-[17px] font-bold leading-9">{t(h)}</h2><p className="text-[15px] leading-6 text-sub">{t(b)}</p></div></li>))}</ol>
       <div className="mt-8"><Link to="/register"><Button variant="primary" size="lg">{t("테스트 신청하기")}</Button></Link></div>
     </Page>
   );
@@ -200,25 +237,38 @@ export function HowTo() {
 export function Pricing() {
   const { t } = useI18n();
   const products = useLoad<any[]>(() => get("/public/products"));
+  const list = products.data || [];
+  const plan = list.find((p) => !p.is_quote);
   return (
     <Page title="가격 및 환불 정책" lead="단일 요금제입니다. 앱 1개당 8,000원(부가세 포함)으로 18일 동안 검사 기기에서 매일 앱을 실행합니다">
-      <PriceTable products={products.data} />
-      <div className="mt-8 grid max-w-5xl gap-4 lg:grid-cols-3">
-        <Card title={t("포함 내용")}><ul className="space-y-2 text-sm leading-6 text-sub">
-          <li>{t("검사 기기 16대, 필수 기간 14일 + 여유 기간 4일 = 18일")}</li>
-          <li>{t("매일 오전 2시(한국시간) 앱 실행, 실행 전 스토어 새 버전 업데이트")}</li>
-          <li>{t("일별 실행 기록·화면 캡처, 보고서, 프로덕션 신청 참고자료")}</li></ul></Card>
-        <Card title={t("무료 연장")}><ul className="space-y-2 text-sm leading-6 text-sub">
-          <li>{t("테스트 시작 후 14일 안에 앱을 2회 이상 업데이트한 이력이 확인되면 추가 결제 없이 18일을 1회 연장합니다")}</li>
-          <li>{t("2~3일 간격 업데이트를 권장합니다. 조건에 해당하지 않으면 다시 결제하여 진행할 수 있습니다")}</li></ul></Card>
-        <Card title={t("환불")}><ul className="space-y-2 text-sm leading-6 text-sub">
-          <li>{t("전액 환불: 12대 이상의 검사 기기에 앱이 설치되지 않은 경우, 서비스 장애로 피해가 발생한 경우")}</li>
-          <li>{t("환불 불가: 12대 이상 설치되어 테스트가 시작된 경우, TWA 앱으로 확인된 경우")}</li>
-          <li>{t("시작 전에는 앱 화면에서 바로 환불됩니다. 장애 환불은 고객 문의 후 영업일 3~5일 심사, 승인 시 5~7일 안에 결제 수단으로 환불됩니다")}</li></ul></Card>
+      <PlanCard plan={plan} />
+      {list.length > 1 && <div className="mt-8"><PriceTable products={list} /></div>}
+      <div className="mt-8 grid gap-4 md:grid-cols-2">
+        <div className="rounded-card border border-line p-6"><h2 className="text-[18px] font-bold">{t("무료 연장 안내")}</h2><p className="mt-2 text-[15px] leading-7 text-sub">{t("2~3일 간격 업데이트를 권장합니다. 조건에 해당하지 않으면 다시 결제하여 진행할 수 있습니다")}</p></div>
+        <div className="rounded-card border border-line p-6"><h2 className="text-[18px] font-bold">{t("환불 절차")}</h2><p className="mt-2 text-[15px] leading-7 text-sub">{t("시작 전에는 앱 화면에서 바로 환불됩니다. 장애 환불은 고객 문의 후 영업일 3~5일 심사, 승인 시 5~7일 안에 결제 수단으로 환불됩니다")}</p></div>
       </div>
-      <p className="mt-4 text-sm"><Link className="underline" to="/legal/refund">{t("가격 및 환불 정책 전문 보기")}</Link></p>
-      <p className="mt-6 max-w-3xl text-[13px] leading-5 text-mute">{t("검사 기기 수는 실제 검사에 사용되는 기기 수량이며 Google Play 비공개 테스트의 독립적인 참여자 수를 의미하지 않습니다")}</p>
+      <p className="mt-8 max-w-3xl text-[14px] leading-6 text-mute">{t("검사 기기 수는 실제 검사에 사용되는 기기 수량이며 Google Play 비공개 테스트의 독립적인 참여자 수를 의미하지 않습니다")}</p>
     </Page>
+  );
+}
+
+function PriceTable({ products }: { products: any[] }) {
+  const { t, locale } = useI18n();
+  return (
+    <div className="overflow-x-auto rounded-card border border-line bg-card">
+      <table className="w-full min-w-[720px] text-left text-[15px]">
+        <thead><tr className="bg-raised text-[13px] text-sub"><th className="h-11 px-6 font-medium">{t("상품")}</th><th className="px-6 text-right font-medium">{t("검사 기기")}</th><th className="px-6 text-right font-medium">{t("검사 기간")}</th><th className="px-6 text-right font-medium">{t("일일 검사")}</th><th className="px-6 text-right font-medium">{t("가격")}</th><th className="px-6" /></tr></thead>
+        <tbody>{products.map((p) => (
+          <tr key={p.id} className="border-t border-line">
+            <td className="h-16 px-6"><span className="font-bold">{p.name}</span><span className="mt-0.5 block text-[13px] text-mute">{locale === "en" ? p.description_en : p.description}</span></td>
+            <td className="num px-6 text-right">{p.is_quote ? "-" : `${p.device_count}${t("대")}`}</td>
+            <td className="num px-6 text-right">{p.is_quote ? "-" : `${p.duration_days}${t("일")}`}</td>
+            <td className="num px-6 text-right">{p.is_quote ? "-" : `${p.daily_runs}${t("회")}`}</td>
+            <td className="num px-6 text-right font-bold">{p.is_quote ? t("별도 견적") : won(p.price)}</td>
+            <td className="px-6 text-right"><Link to={p.is_quote ? "/dashboard/support" : "/dashboard/new-test"}><Button size="sm">{t(p.is_quote ? "문의" : "신청")}</Button></Link></td>
+          </tr>))}</tbody>
+      </table>
+    </div>
   );
 }
 
@@ -226,8 +276,8 @@ export function Devices() {
   const { t } = useI18n();
   const d = useLoad(() => get("/public/devices"));
   return (
-    <Page title="지원 기기 안내" lead="현재 폰팜에 등록되어 검사에 사용되는 실기기 목록입니다">
-      <Card pad={false} title={<>{t("등록 실기기")} <span className="num ml-2 text-mute">{d.data?.total ?? 0}</span></>}>
+    <Page title="검사 기기 안내" lead="현재 폰팜에 등록되어 검사에 사용되는 실기기 목록입니다">
+      <Card pad={false} title={<>{t("등록 실기기")} <span className="num ml-1 text-accent">{d.data?.total ?? 0}</span></>}>
         <Table rows={d.data?.models} empty="등록된 실기기가 아직 없습니다. 장비 연결 후 이 목록에 표시됩니다" cols={[
           { key: "manufacturer", label: "제조사" }, { key: "model", label: "모델" }, { key: "android_version", label: "Android", mono: true },
           { key: "resolution", label: "해상도", mono: true }, { key: "count", label: "수량", right: true }]} />
@@ -239,7 +289,7 @@ export function Devices() {
 export function FaqPage() {
   const { locale } = useI18n();
   const f = useLoad<any[]>(() => get(`/public/faqs?locale=${locale}`), [locale]);
-  return <Page title="자주 묻는 질문"><div className="max-w-3xl">{(f.data || []).map((q) => <details key={q.id} className="border-t border-line py-4 first:border-0"><summary className="cursor-pointer text-[16px] font-medium">{q.question}</summary><p className="mt-3 whitespace-pre-line text-sm leading-6 text-sub">{q.answer}</p></details>)}</div></Page>;
+  return <Page title="자주 묻는 질문"><div className="max-w-3xl space-y-3">{(f.data || []).map((q) => <details key={q.id} className="group rounded-card border border-line px-6 py-5 open:bg-[#f7f8fa]"><summary className="cursor-pointer list-none text-[17px] font-bold marker:hidden"><span className="mr-3 text-accent">Q</span>{q.question}</summary><p className="mt-4 whitespace-pre-line text-[15px] leading-7 text-sub">{q.answer}</p></details>)}</div></Page>;
 }
 
 export function Notices() {
@@ -248,7 +298,7 @@ export function Notices() {
   return (
     <Page title="공지사항">
       <div className="max-w-3xl">{n.data && !n.data.length && <p className="text-mute">{t("등록된 공지사항이 없습니다")}</p>}
-        {(n.data || []).map((a) => <article key={a.id} className="border-t border-line py-5 first:border-0"><div className="num text-xs text-mute">{dt(a.created_at, false)}</div><h2 className="mt-1 text-[16px] font-medium">{a.title}</h2><p className="mt-2 whitespace-pre-line text-sm leading-6 text-sub">{a.body}</p></article>)}</div>
+        {(n.data || []).map((a) => <article key={a.id} className="border-b border-line py-6 first:pt-0"><div className="num text-[13px] text-mute">{dt(a.created_at, false)}</div><h2 className="mt-1 text-[18px] font-bold">{a.title}</h2><p className="mt-2 whitespace-pre-line text-[15px] leading-7 text-sub">{a.body}</p></article>)}</div>
     </Page>
   );
 }
@@ -257,13 +307,13 @@ export function Legal() {
   const { key } = useParams();
   const { locale, t } = useI18n();
   const d = useLoad(() => get(`/public/legal/${key}?locale=${locale}`), [key, locale]);
-  return <Page title={d.data?.title || ""}><article className="max-w-3xl whitespace-pre-line text-sm leading-7 text-sub">{d.data?.body}</article>{d.data && <p className="num mt-8 text-xs text-mute">{t("최종 수정")} {dt(d.data.updated_at, false)}</p>}</Page>;
+  return <Page title={d.data?.title || ""}><article className="max-w-3xl whitespace-pre-line text-[15px] leading-8 text-sub">{d.data?.body}</article>{d.data && <p className="num mt-8 text-xs text-mute">{t("최종 수정")} {dt(d.data.updated_at, false)}</p>}</Page>;
 }
 
 // ---------------- 인증 화면 ----------------
 function AuthShell({ title, children, footer }: { title: string; children: ReactNode; footer?: ReactNode }) {
   const { t } = useI18n();
-  return <div className="mx-auto w-full max-w-[400px] px-6 py-16"><h1 className="text-[26px] font-medium">{t(title)}</h1><div className="mt-8 space-y-4">{children}</div>{footer && <div className="mt-6 text-sm text-sub">{footer}</div>}</div>;
+  return <div className="min-h-[calc(100vh-64px)] bg-[#f7f8fa] px-5 py-12 sm:py-16"><div className="mx-auto w-full max-w-[440px] rounded-panel border border-line bg-card p-7 sm:p-9"><h1 className="text-[26px] font-extrabold tracking-[-0.03em]">{t(title)}</h1><div className="mt-7 space-y-4">{children}</div>{footer && <div className="mt-6 text-center text-[14px] font-medium text-sub">{footer}</div>}</div></div>;
 }
 
 export function Login({ admin }: { admin?: boolean }) {
